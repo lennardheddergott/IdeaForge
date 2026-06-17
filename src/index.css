@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..800;1,14..32,400&family=Instrument+Serif:ital@0;1&display=swap');
+@import 'tailwindcss';
+
+/* ─────────────────────────────────────────────────────────────
+   IdeaForge — Design Tokens
+   ───────────────────────────────────────────────────────────── */
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+
+  /* Neutral "ink" scale — cool anthracite → black */
+  --color-ink-50: #f7f7f8;
+  --color-ink-100: #ededf0;
+  --color-ink-200: #dcdce1;
+  --color-ink-300: #bdbdc6;
+  --color-ink-400: #92929e;
+  --color-ink-500: #6f6f7b;
+  --color-ink-600: #54545f;
+  --color-ink-700: #3f3f48;
+  --color-ink-800: #28282e;
+  --color-ink-900: #161619;
+  --color-ink-950: #0a0a0c;
+
+  /* Surfaces */
+  --color-canvas: #ffffff;
+  --color-cream: #fafaf8;
+  --color-mist: #f4f4f2;
+
+  /* Accents — refined blue → violet */
+  --color-accent-50: #eef0ff;
+  --color-accent-100: #e0e3ff;
+  --color-accent-200: #c6cbff;
+  --color-accent-300: #a3a8ff;
+  --color-accent-400: #8480fb;
+  --color-accent-500: #6a5cf5;
+  --color-accent-600: #5b45ea;
+  --color-accent-700: #4c36cf;
+  --color-accent-800: #3f2fa6;
+  --color-accent-900: #352c83;
+
+  --color-violet-accent: #9b6bf7;
+
+  /* Easing */
+  --ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Radii */
+  --radius-2xl: 1.25rem;
+  --radius-3xl: 1.75rem;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Base
+   ───────────────────────────────────────────────────────────── */
+@layer base {
+  * {
+    border-color: var(--color-ink-100);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink-900);
+    font-family: var(--font-sans);
+    font-feature-settings: 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-500);
+    color: #fff;
+  }
+
+  h1, h2, h3, h4 {
+    letter-spacing: -0.022em;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Utilities
+   ───────────────────────────────────────────────────────────── */
+@utility text-balance {
+  text-wrap: balance;
+}
+
+@layer utilities {
+  .gradient-text {
+    background: linear-gradient(110deg, var(--color-ink-900) 28%, var(--color-accent-600) 64%, var(--color-violet-accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .grain {
+    background-image: radial-gradient(circle at 1px 1px, rgba(0, 0, 0, 0.045) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+
+  .glass {
+    background-color: color-mix(in srgb, white 70%, transparent);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  .shadow-soft {
+    box-shadow: 0 1px 2px rgba(16, 16, 22, 0.04), 0 4px 16px rgba(16, 16, 22, 0.05);
+  }
+
+  .shadow-float {
+    box-shadow: 0 2px 4px rgba(16, 16, 22, 0.04), 0 12px 32px -8px rgba(16, 16, 22, 0.10);
+  }
+
+  .shadow-lift {
+    box-shadow: 0 4px 8px rgba(16, 16, 22, 0.05), 0 24px 56px -12px rgba(16, 16, 22, 0.16);
+  }
+
+  .animate-marquee {
+    animation: marquee 38s linear infinite;
+  }
+}
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-200);
+  border-radius: 9999px;
+  border: 3px solid var(--color-canvas);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ink-300);
+}

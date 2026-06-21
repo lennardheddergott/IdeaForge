@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Menu, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
+import { useAuth } from '@/context/AuthContext'
 import { Logo } from './Logo'
 
 const links = [
@@ -17,6 +18,13 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { user, signOut } = useAuth()
+
+  const handleSignOut = async () => {
+    await signOut()
+    navigate('/')
+  }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12)
@@ -62,12 +70,21 @@ export function Navbar() {
           </div>
 
           <div className="hidden items-center gap-2 md:flex">
-            <Link
-              to="/dashboard"
-              className="px-3 py-2 text-sm font-medium text-ink-600 transition-colors hover:text-ink-950"
-            >
-              Anmelden
-            </Link>
+            {user ? (
+              <button
+                onClick={handleSignOut}
+                className="px-3 py-2 text-sm font-medium text-ink-600 transition-colors hover:text-ink-950"
+              >
+                Abmelden
+              </button>
+            ) : (
+              <Link
+                to="/login"
+                className="px-3 py-2 text-sm font-medium text-ink-600 transition-colors hover:text-ink-950"
+              >
+                Anmelden
+              </Link>
+            )}
             <Button to="/create" size="sm">
               Jetzt starten
             </Button>
@@ -109,6 +126,21 @@ export function Navbar() {
               </NavLink>
             ))}
             <div className="mt-2 border-t border-ink-100 pt-3">
+              {user ? (
+                <button
+                  onClick={handleSignOut}
+                  className="mb-2 block w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-ink-600 hover:bg-ink-50"
+                >
+                  Abmelden
+                </button>
+              ) : (
+                <NavLink
+                  to="/login"
+                  className="mb-2 block rounded-xl px-4 py-3 text-sm font-medium text-ink-600 hover:bg-ink-50"
+                >
+                  Anmelden
+                </NavLink>
+              )}
               <Button to="/create" size="md" className="w-full">
                 Jetzt starten
               </Button>

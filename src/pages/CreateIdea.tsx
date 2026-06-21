@@ -15,6 +15,7 @@ import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
 import { Reveal } from '@/components/ui/Reveal'
 import { cn } from '@/lib/utils'
+import { createIdea } from '@/lib/ideas'
 import {
   budgets,
   categories,
@@ -30,8 +31,9 @@ export function CreateIdea() {
   const [mats, setMats] = useState<string[]>(['oak'])
   const [category, setCategory] = useState<string | null>('tvboard')
   const [budget, setBudget] = useState<string | null>('b3')
-  const [images, setImages] = useState<string[]>([])
+  const [images, setImages] = useState<File[]>([])
   const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const toggleMat = (id: string) =>
     setMats((prev) =>
@@ -40,13 +42,31 @@ export function CreateIdea() {
 
   const addImages = (files: FileList | null) => {
     if (!files) return
-    const next = Array.from(files).slice(0, 4 - images.length).map((f) => f.name)
+    const next = Array.from(files).slice(0, 4 - images.length)
     setImages((prev) => [...prev, ...next])
   }
 
-  const generate = () => {
+  const generate = async () => {
+    if (!prompt.trim()) {
+      setError('Bitte beschreibe zuerst deine Idee.')
+      return
+    }
+    setError(null)
     setGenerating(true)
-    window.setTimeout(() => navigate('/result'), 2200)
+    try {
+      await createIdea({
+        prompt,
+        style,
+        materials: mats,
+        category,
+        budget,
+        images,
+      })
+      navigate('/result')
+    } catch (e) {
+      setGenerating(false)
+      setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.')
+    }
   }
 
   return (
@@ -120,12 +140,12 @@ export function CreateIdea() {
             </label>
             {images.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {images.map((name, i) => (
+                {images.map((file, i) => (
                   <span
                     key={i}
                     className="inline-flex items-center gap-2 rounded-full bg-ink-100 py-1 pl-3 pr-1.5 text-xs text-ink-700"
                   >
-                    {name.length > 22 ? name.slice(0, 22) + '…' : name}
+                    {file.name.length > 22 ? file.name.slice(0, 22) + '…' : file.name}
                     <button
                       onClick={() =>
                         setImages((prev) => prev.filter((_, idx) => idx !== i))
@@ -207,6 +227,11 @@ export function CreateIdea() {
 
         {/* submit */}
         <div className="sticky bottom-6 mt-12">
+          {error && (
+            <p className="mb-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
+            </p>
+          )}
           <div className="glass flex flex-col items-center justify-between gap-4 rounded-2xl border border-ink-100 p-4 shadow-lift sm:flex-row sm:px-6">
             <p className="text-sm text-ink-500">
               Bereit? Deine KI-Vorschau ist in ~30 Sekunden fertig.

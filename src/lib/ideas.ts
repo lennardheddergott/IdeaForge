@@ -10,6 +10,9 @@ export interface IdeaInput {
   images: File[] // Inspirationsbilder, optional
 }
 
+/** Lebenszyklus der KI-Bildgenerierung (vgl. schema.sql). */
+export type IdeaStatus = 'draft' | 'pending' | 'generated' | 'failed'
+
 /** Eine in der DB gespeicherte Idee. */
 export interface Idea {
   id: string
@@ -20,7 +23,11 @@ export interface Idea {
   category: string | null
   budget: string | null
   image_paths: string[]
-  status: 'draft' | 'generated'
+  status: IdeaStatus
+  /** Öffentliche URL der generierten Konzeptskizze (null, solange nicht fertig). */
+  image_url: string | null
+  /** Fehlerursache, falls status === 'failed'. */
+  error: string | null
   created_at: string
 }
 
@@ -63,12 +70,51 @@ export async function createIdea(input: IdeaInput): Promise<Idea> {
       category: input.category,
       budget: input.budget,
       image_paths,
-      status: 'draft',
+      // 'pending' = gespeichert, KI-Konzeptskizze wird gleich erzeugt.
+      status: 'pending',
     })
     .select()
     .single()
 
   if (error) throw new Error(`Idee konnte nicht gespeichert werden: ${error.message}`)
+  return data as Idea
+}
+
+/**
+ * Stößt die KI-Bildgenerierung für eine Idee an (Edge Function 'generate-sketch').
+ * Die Function erzeugt die Konzeptskizze, legt sie im Storage ab und schreibt
+ * image_url + status zurück in die DB. Gibt die aktualisierte Idee zurück.
+ */
+export async function requestSketch(ideaId: string): Promise<Idea> {
+  const { data, error } = await supabase.functions.invoke<{
+    status: IdeaStatus
+    image_url?: string
+    error?: string
+  }>('generate-sketch', { body: { ideaId } })
+
+  // Netzwerk-/HTTP-Fehler beim Aufruf der Function selbst.
+  if (error) {
+    throw new Error(
+      `Bildgenerierung konnte nicht gestartet werden: ${error.message}`,
+    )
+  }
+  // Die Function meldet einen fachlichen Fehler (z. B. OpenAI-Fehler).
+  if (data?.status === 'failed') {
+    throw new Error(data.error ?? 'Bildgenerierung fehlgeschlagen.')
+  }
+
+  return getIdea(ideaId)
+}
+
+/** Lädt eine einzelne Idee des aktuell eingeloggten Nutzers. */
+export async function getIdea(id: string): Promise<Idea> {
+  const { data, error } = await supabase
+    .from('ideas')
+    .select()
+    .eq('id', id)
+    .single()
+
+  if (error) throw new Error(`Idee konnte nicht geladen werden: ${error.message}`)
   return data as Idea
 }
 

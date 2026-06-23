@@ -15,7 +15,7 @@ import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
 import { Reveal } from '@/components/ui/Reveal'
 import { cn } from '@/lib/utils'
-import { createIdea } from '@/lib/ideas'
+import { createIdea, requestSketch } from '@/lib/ideas'
 import {
   budgets,
   categories,
@@ -54,7 +54,8 @@ export function CreateIdea() {
     setError(null)
     setGenerating(true)
     try {
-      await createIdea({
+      // 1) Idee speichern (status 'pending', user_id + Zeitstempel in der DB).
+      const idea = await createIdea({
         prompt,
         style,
         materials: mats,
@@ -62,10 +63,16 @@ export function CreateIdea() {
         budget,
         images,
       })
-      navigate('/result')
+      // 2) KI-Konzeptskizze erzeugen lassen (OpenAI via Edge Function).
+      //    Die Function schreibt image_url + Status zurück in die DB.
+      await requestSketch(idea.id)
+      // 3) Ergebnis anzeigen.
+      navigate(`/result/${idea.id}`)
     } catch (e) {
       setGenerating(false)
-      setError(e instanceof Error ? e.message : 'Speichern fehlgeschlagen.')
+      setError(
+        e instanceof Error ? e.message : 'Generierung fehlgeschlagen.',
+      )
     }
   }
 

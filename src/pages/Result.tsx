@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import {
   ArrowRight,
   Box,
@@ -17,6 +18,7 @@ import { Card } from '@/components/ui/Card'
 import { Reveal } from '@/components/ui/Reveal'
 import { RenderingPlaceholder } from '@/components/ui/RenderingPlaceholder'
 import { designConcept as d } from '@/data/projects'
+import { getIdea, requestSketch, type Idea } from '@/lib/ideas'
 import { formatEUR } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
@@ -28,7 +30,59 @@ const views = [
 ]
 
 export function Result() {
+  const { id } = useParams()
   const [active, setActive] = useState(0)
+  const [idea, setIdea] = useState<Idea | null>(null)
+  const [loading, setLoading] = useState(Boolean(id))
+  const [retrying, setRetrying] = useState(false)
+
+  // Idee laden; solange die Skizze noch generiert wird ('pending'), nachpollen.
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const load = async () => {
+      try {
+        const next = await getIdea(id)
+        if (cancelled) return
+        setIdea(next)
+        setLoading(false)
+        if (next.status === 'pending') timer = setTimeout(load, 2500)
+      } catch {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    setLoading(true)
+    load()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [id])
+
+  // Erneuter Versuch nach einem Fehler.
+  const retry = async () => {
+    if (!id) return
+    setRetrying(true)
+    try {
+      setIdea(await requestSketch(id))
+    } catch (e) {
+      setIdea((prev) =>
+        prev
+          ? {
+              ...prev,
+              status: 'failed',
+              error: e instanceof Error ? e.message : 'Fehlgeschlagen.',
+            }
+          : prev,
+      )
+    } finally {
+      setRetrying(false)
+    }
+  }
+
+  const status = idea?.status
 
   return (
     <div className="relative">
@@ -37,17 +91,30 @@ export function Result() {
       <Container className="py-14 sm:py-16">
         <Reveal>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3.5 py-1.5 text-sm font-medium text-emerald-600">
-              <Check size={14} /> Design generiert
-            </span>
+            {status === 'failed' ? (
+              <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3.5 py-1.5 text-sm font-medium text-red-600">
+                Generierung fehlgeschlagen
+              </span>
+            ) : status === 'pending' || (loading && id) ? (
+              <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3.5 py-1.5 text-sm font-medium text-amber-600">
+                <Sparkles size={14} className="animate-spin" /> Skizze wird
+                generiert…
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3.5 py-1.5 text-sm font-medium text-emerald-600">
+                <Check size={14} /> Design generiert
+              </span>
+            )}
             <span className="text-sm text-ink-400">Schritt 2 von 3</span>
           </div>
           <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-balance text-4xl font-semibold leading-[1.05] text-ink-950 sm:text-5xl">
-                {d.title}
+                {idea ? 'Deine Konzeptskizze' : d.title}
               </h1>
-              <p className="mt-3 text-lg text-ink-500">{d.tagline}</p>
+              <p className="mt-3 text-lg text-ink-500">
+                {idea ? idea.prompt : d.tagline}
+              </p>
             </div>
             <div className="flex gap-2">
               <Button variant="secondary" size="sm">
@@ -64,26 +131,37 @@ export function Result() {
           {/* gallery */}
           <Reveal>
             <div className="flex flex-col gap-4">
-              <RenderingPlaceholder
-                variant={views[active].variant}
-                className="shadow-lift"
-              />
-              <div className="grid grid-cols-4 gap-3">
-                {views.map((v, i) => (
-                  <button
-                    key={v.label}
-                    onClick={() => setActive(i)}
-                    className={cn(
-                      'overflow-hidden rounded-xl border-2 transition-all',
-                      active === i
-                        ? 'border-accent-600 ring-2 ring-accent-100'
-                        : 'border-transparent opacity-70 hover:opacity-100',
-                    )}
-                  >
-                    <RenderingPlaceholder variant={v.variant} />
-                  </button>
-                ))}
-              </div>
+              {id ? (
+                <SketchView
+                  idea={idea}
+                  loading={loading}
+                  retrying={retrying}
+                  onRetry={retry}
+                />
+              ) : (
+                <>
+                  <RenderingPlaceholder
+                    variant={views[active].variant}
+                    className="shadow-lift"
+                  />
+                  <div className="grid grid-cols-4 gap-3">
+                    {views.map((v, i) => (
+                      <button
+                        key={v.label}
+                        onClick={() => setActive(i)}
+                        className={cn(
+                          'overflow-hidden rounded-xl border-2 transition-all',
+                          active === i
+                            ? 'border-accent-600 ring-2 ring-accent-100'
+                            : 'border-transparent opacity-70 hover:opacity-100',
+                        )}
+                      >
+                        <RenderingPlaceholder variant={v.variant} />
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </Reveal>
 
@@ -281,4 +359,62 @@ export function Result() {
       </Container>
     </div>
   )
+}
+
+/* ───────────── generierte Konzeptskizze ───────────── */
+
+function SketchView({
+  idea,
+  loading,
+  retrying,
+  onRetry,
+}: {
+  idea: Idea | null
+  loading: boolean
+  retrying: boolean
+  onRetry: () => void
+}) {
+  // Lädt noch / wird gerade generiert.
+  if (loading || retrying || !idea || idea.status === 'pending') {
+    return (
+      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-2xl border border-ink-100 bg-white shadow-lift">
+        <Sparkles size={28} className="animate-spin text-accent-600" />
+        <p className="text-sm text-ink-500">
+          Deine technische Konzeptskizze wird erzeugt…
+        </p>
+      </div>
+    )
+  }
+
+  // Fehlgeschlagen → Ursache + erneuter Versuch.
+  if (idea.status === 'failed') {
+    return (
+      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-2xl border border-red-100 bg-red-50/60 p-6 text-center">
+        <p className="text-sm font-medium text-red-700">
+          Die Skizze konnte nicht generiert werden.
+        </p>
+        {idea.error && (
+          <p className="max-w-md text-xs text-red-500">{idea.error}</p>
+        )}
+        <Button size="sm" onClick={onRetry}>
+          Erneut versuchen
+          <ArrowRight size={16} />
+        </Button>
+      </div>
+    )
+  }
+
+  // Erfolgreich → generiertes Bild anzeigen.
+  if (idea.image_url) {
+    return (
+      <img
+        src={idea.image_url}
+        alt="Generierte technische Konzeptskizze"
+        className="aspect-[4/3] w-full rounded-2xl border border-ink-100 bg-white object-contain shadow-lift"
+      />
+    )
+  }
+
+  // Fallback (sollte praktisch nicht eintreten).
+  return <RenderingPlaceholder variant="cabinet" className="shadow-lift" />
 }

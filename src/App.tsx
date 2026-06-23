@@ -22,6 +22,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/create" element={<CreateIdea />} />
           <Route path="/result" element={<Result />} />
+          <Route path="/result/:id" element={<Result />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
         </Route>

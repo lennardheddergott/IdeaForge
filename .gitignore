@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Edge-Function-Secrets (OPENAI_API_KEY o. Ä.) – niemals committen
+.env
+supabase/functions/.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

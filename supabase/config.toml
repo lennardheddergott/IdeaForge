@@ -1,0 +1,9 @@
+# Supabase-Projektkonfiguration (für die Supabase CLI).
+# Nur die für die Edge Functions relevanten Einstellungen sind hier gesetzt;
+# alle übrigen Werte verwenden die CLI-Standardwerte.
+
+# Edge Function für die KI-Bildgenerierung.
+# verify_jwt = true → die Function ist nur mit gültigem Nutzer-JWT aufrufbar
+# (das Frontend reicht den Token via supabase.functions.invoke automatisch mit).
+[functions.generate-sketch]
+verify_jwt = true

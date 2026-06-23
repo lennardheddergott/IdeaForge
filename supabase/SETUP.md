@@ -41,7 +41,56 @@ Speichern von Ideen zu aktivieren. Dauert ca. 10 Minuten.
    > `.env.local` wird von Git ignoriert — die Keys landen nicht im Repo.
    > NIEMALS den `Service Role`-Key hier eintragen.
 
-## 5. Starten & testen
+## 5. OpenAI-Bildgenerierung (Edge Function)
+
+Die KI-Konzeptskizzen werden von der Edge Function
+[`functions/generate-sketch`](./functions/generate-sketch/index.ts) erzeugt.
+Der **OpenAI-API-Schlüssel liegt ausschließlich serverseitig** als
+Function-Secret — niemals im Frontend (`.env.local`/`VITE_*`).
+
+### 5.1 Bei einer bereits bestehenden Datenbank: Migration einspielen
+
+> Bei einer **frischen** Installation ist alles schon in `schema.sql` enthalten —
+> dann überspringen.
+
+**SQL Editor → New query** → Inhalt von
+[`migrations/0001_image_generation.sql`](./migrations/0001_image_generation.sql)
+einfügen → **Run**. Das ergänzt die Status-Werte `pending`/`failed`, die Spalten
+`image_url`/`error` und den öffentlichen Bucket `idea-sketches`.
+
+### 5.2 Supabase CLI installieren & Projekt verknüpfen
+
+```bash
+npm install -g supabase            # oder: brew install supabase/tap/supabase
+supabase login
+supabase link --project-ref <DEIN-PROJECT-REF>   # Ref steht in der Project-URL
+```
+
+### 5.3 OpenAI-Schlüssel als Secret hinterlegen
+
+```bash
+supabase secrets set OPENAI_API_KEY=sk-...
+# optional: Modell/Parameter überschreiben (Defaults: gpt-image-2 / 1024x1024 / medium)
+# supabase secrets set OPENAI_IMAGE_MODEL=gpt-image-2
+```
+
+> `SUPABASE_URL`, `SUPABASE_ANON_KEY` und `SUPABASE_SERVICE_ROLE_KEY` stellt die
+> Laufzeitumgebung automatisch bereit — die müssen **nicht** gesetzt werden.
+
+### 5.4 Function deployen
+
+```bash
+supabase functions deploy generate-sketch
+```
+
+**Lokal testen** (statt deploy): Secrets in `supabase/functions/.env` (Vorlage:
+`functions/.env.example`) eintragen und
+
+```bash
+supabase functions serve generate-sketch --env-file supabase/functions/.env
+```
+
+## 6. Starten & testen
 
 ```bash
 npm run dev
@@ -49,8 +98,11 @@ npm run dev
 
 1. `/login` öffnen → **Registrieren** → Konto anlegen.
 2. Auf `/create` eine Idee beschreiben und **Design generieren**.
-3. In Supabase **Table Editor → ideas** prüfen: Die Idee ist gespeichert,
-   hochgeladene Bilder liegen unter **Storage → idea-images → <deine user_id>**.
+   Die Idee wird mit Status `pending` gespeichert, die Function erzeugt die
+   Skizze und setzt den Status auf `generated` (bei Fehlern `failed`).
+3. In Supabase prüfen: **Table Editor → ideas** (Status + `image_url`),
+   die Skizze liegt unter **Storage → idea-sketches → <deine user_id>**,
+   Inspirationsbilder unter **Storage → idea-images → <deine user_id>**.
 
 ## Hinweise
 

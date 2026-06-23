@@ -90,7 +90,11 @@ create trigger on_auth_user_created
 -- Felder entsprechen dem Formular in src/pages/CreateIdea.tsx:
 --   prompt, style (1x), materials (mehrere), category (1x), budget (1x),
 --   image_paths (Uploads im Storage-Bucket "idea-images").
--- "status" trennt einen Entwurf (draft) vom generierten Ergebnis (generated).
+-- "status" beschreibt den Lebenszyklus der KI-Bildgenerierung:
+--   draft     – Entwurf ohne Generierung (Altbestand / manuell gespeichert)
+--   pending   – gespeichert, KI-Konzeptskizze wird gerade erzeugt
+--   generated – Skizze erfolgreich erzeugt (image_url gesetzt)
+--   failed    – Generierung fehlgeschlagen (error enthält die Ursache)
 create table if not exists public.ideas (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users (id) on delete cascade,
@@ -101,10 +105,14 @@ create table if not exists public.ideas (
   category    text,                                  -- options.ts → categories.id (z. B. 'tvboard')
   -- Budget (optional): NULL = keine Angabe; speichert die Budget-Stufen-id aus options.ts
   budget      text,                                  -- options.ts → budgets.id (z. B. 'b3')
-  image_paths text[] not null default '{}',          -- Pfade im Storage-Bucket 'idea-images'
+  image_paths text[] not null default '{}',          -- Inspirationsbilder im Bucket 'idea-images'
   status      text not null default 'draft'
-              check (status in ('draft', 'generated')),
-  -- Optionales KI-Ergebnis (entspricht designConcept in projects.ts), als JSON:
+              check (status in ('draft', 'pending', 'generated', 'failed')),
+  -- Öffentliche URL der von gpt-image generierten Konzeptskizze (Bucket 'idea-sketches').
+  image_url   text,
+  -- Fehlerursache, falls status = 'failed' (für saubere Fehleranzeige im Frontend).
+  error       text,
+  -- Optionales strukturiertes KI-Ergebnis (entspricht designConcept in projects.ts):
   concept     jsonb,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
@@ -295,6 +303,26 @@ create policy "idea-images: delete own"
     bucket_id = 'idea-images'
     and auth.uid()::text = (storage.foldername(name))[1]
   );
+
+
+-- ============================================================================
+-- 8) STORAGE — Bucket für die von der KI generierten Konzeptskizzen
+-- ============================================================================
+-- Geschrieben wird ausschließlich von der Edge Function 'generate-sketch'
+-- (mit Service-Role, umgeht RLS). Der Bucket ist ÖFFENTLICH lesbar, damit die
+-- in ideas.image_url gespeicherte URL stabil bleibt und z. B. direkt an
+-- Hersteller weitergegeben werden kann. Dateien liegen unter <user_id>/<idea_id>.png.
+insert into storage.buckets (id, name, public)
+values ('idea-sketches', 'idea-sketches', true)
+on conflict (id) do nothing;
+
+-- Öffentlicher Lesezugriff (der Bucket ist public; diese Policy macht das explizit).
+drop policy if exists "idea-sketches: public read" on storage.objects;
+create policy "idea-sketches: public read"
+  on storage.objects for select
+  using (bucket_id = 'idea-sketches');
+-- Kein INSERT/UPDATE/DELETE für normale Nutzer → nur die Service-Role (Edge
+-- Function) schreibt in diesen Bucket.
 
 -- ============================================================================
 -- Ende des Schemas

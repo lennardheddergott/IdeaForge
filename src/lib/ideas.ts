@@ -24,8 +24,12 @@ export interface Idea {
   budget: string | null
   image_paths: string[]
   status: IdeaStatus
-  /** Öffentliche URL der generierten Konzeptskizze (null, solange nicht fertig). */
+  /** Alt/Abwärtskompatibilität: gespiegelt = concept_sheet_url. */
   image_url: string | null
+  /** Öffentliche URL des technischen Konzeptblatts (null, solange nicht fertig). */
+  concept_sheet_url: string | null
+  /** Öffentliche URL der fotorealistischen Produktvorschau (null, solange nicht fertig). */
+  preview_image_url: string | null
   /** Fehlerursache, falls status === 'failed'. */
   error: string | null
   created_at: string
@@ -88,7 +92,8 @@ export async function createIdea(input: IdeaInput): Promise<Idea> {
 export async function requestSketch(ideaId: string): Promise<Idea> {
   const { data, error } = await supabase.functions.invoke<{
     status: IdeaStatus
-    image_url?: string
+    concept_sheet_url?: string
+    preview_image_url?: string
     error?: string
   }>('generate-sketch', { body: { ideaId } })
 

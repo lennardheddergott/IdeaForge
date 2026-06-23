@@ -108,8 +108,10 @@ create table if not exists public.ideas (
   image_paths text[] not null default '{}',          -- Inspirationsbilder im Bucket 'idea-images'
   status      text not null default 'draft'
               check (status in ('draft', 'pending', 'generated', 'failed')),
-  -- Öffentliche URL der von gpt-image generierten Konzeptskizze (Bucket 'idea-sketches').
-  image_url   text,
+  -- Öffentliche URLs der von gpt-image erzeugten Bilder (Bucket 'idea-sketches'):
+  image_url          text,  -- Abwärtskompatibilität: gespiegelt = concept_sheet_url
+  concept_sheet_url  text,  -- technisches Engineering-/CAD-Konzeptblatt
+  preview_image_url  text,  -- fotorealistische Produktvorschau
   -- Fehlerursache, falls status = 'failed' (für saubere Fehleranzeige im Frontend).
   error       text,
   -- Optionales strukturiertes KI-Ergebnis (entspricht designConcept in projects.ts):

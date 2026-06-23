@@ -1,10 +1,11 @@
 // ============================================================================
 // Edge Function: generate-sketch
 // ============================================================================
-// Erzeugt aus einer gespeicherten Idee eine standardisierte technische
-// Konzeptskizze mit OpenAI (gpt-image-2), legt sie im Storage-Bucket
-// 'idea-sketches' ab und schreibt die öffentliche URL + den Status zurück
-// in die Tabelle 'ideas'.
+// Erzeugt aus einer gespeicherten Idee ZWEI Bilder mit OpenAI (gpt-image-2):
+//   1) ein standardisiertes technisches Konzeptblatt (concept_sheet_url)
+//   2) eine fotorealistische Produktvorschau (preview_image_url)
+// Beide werden im Storage-Bucket 'idea-sketches' abgelegt; die öffentlichen
+// URLs + der Status werden in die Tabelle 'ideas' zurückgeschrieben.
 //
 // Sicherheit:
 //   - Der OpenAI-API-Schlüssel liegt ausschließlich als Edge-Function-Secret
@@ -20,7 +21,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
-import { buildSketchPrompt } from './prompt.ts'
+import { buildSketchPrompt, buildPreviewPrompt } from './prompt.ts'
 
 const SKETCH_BUCKET = 'idea-sketches'
 const OPENAI_IMAGE_ENDPOINT = 'https://api.openai.com/v1/images/generations'
@@ -31,6 +32,58 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
+}
+
+/** Erzeugt ein Bild bei OpenAI und gibt die rohen PNG-Bytes zurück. */
+async function generateImageBytes(opts: {
+  apiKey: string
+  model: string
+  size: string
+  quality: string
+  prompt: string
+}): Promise<Uint8Array> {
+  const resp = await fetch(OPENAI_IMAGE_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${opts.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: opts.model,
+      prompt: opts.prompt,
+      size: opts.size,
+      quality: opts.quality,
+      n: 1,
+    }),
+  })
+
+  if (!resp.ok) {
+    const detail = await resp.text()
+    throw new Error(`OpenAI-API-Fehler (${resp.status}): ${detail.slice(0, 400)}`)
+  }
+
+  const result = await resp.json()
+  const b64: string | undefined = result?.data?.[0]?.b64_json
+  if (!b64) {
+    throw new Error('OpenAI hat kein Bild zurückgegeben.')
+  }
+  return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+}
+
+/** Lädt PNG-Bytes in den Storage-Bucket und gibt die öffentliche URL zurück. */
+async function uploadPng(
+  admin: ReturnType<typeof createClient>,
+  path: string,
+  bytes: Uint8Array,
+): Promise<string> {
+  const { error } = await admin.storage
+    .from(SKETCH_BUCKET)
+    .upload(path, bytes, { contentType: 'image/png', upsert: true })
+  if (error) {
+    throw new Error(`Storage-Upload fehlgeschlagen: ${error.message}`)
+  }
+  const { data } = admin.storage.from(SKETCH_BUCKET).getPublicUrl(path)
+  return data.publicUrl
 }
 
 Deno.serve(async (req: Request) => {
@@ -110,66 +163,52 @@ Deno.serve(async (req: Request) => {
       .update({ status: 'pending', error: null })
       .eq('id', ideaId)
 
-    // --- 1) Standardisierten Prompt bauen -----------------------------------
-    const prompt = buildSketchPrompt({
+    // --- 1) Beide Prompts aus DERSELBEN Eingabe bauen -----------------------
+    const ideaForPrompt = {
       prompt: idea.prompt,
       style: idea.style,
       materials: idea.materials,
       category: idea.category,
-    })
+    }
+    const conceptPrompt = buildSketchPrompt(ideaForPrompt) // technisches Konzeptblatt
+    const previewPrompt = buildPreviewPrompt(ideaForPrompt) // fotorealistische Vorschau
 
-    // --- 2) OpenAI-Bildgenerierung ------------------------------------------
+    // --- 2) Beide Bilder bei OpenAI erzeugen (parallel → konsistent & schnell)
     const model = Deno.env.get('OPENAI_IMAGE_MODEL') ?? 'gpt-image-2'
     const size = Deno.env.get('OPENAI_IMAGE_SIZE') ?? '1024x1024'
     const quality = Deno.env.get('OPENAI_IMAGE_QUALITY') ?? 'medium'
 
-    const openaiResp = await fetch(OPENAI_IMAGE_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openaiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ model, prompt, size, quality, n: 1 }),
-    })
+    const [conceptBytes, previewBytes] = await Promise.all([
+      generateImageBytes({ apiKey: openaiKey, model, size, quality, prompt: conceptPrompt }),
+      generateImageBytes({ apiKey: openaiKey, model, size, quality, prompt: previewPrompt }),
+    ])
 
-    if (!openaiResp.ok) {
-      const detail = await openaiResp.text()
-      throw new Error(
-        `OpenAI-API-Fehler (${openaiResp.status}): ${detail.slice(0, 400)}`,
-      )
-    }
+    // --- 3) Beide Bilder getrennt in den Storage-Bucket hochladen -----------
+    const [conceptUrl, previewUrl] = await Promise.all([
+      uploadPng(admin, `${idea.user_id}/${ideaId}-concept.png`, conceptBytes),
+      uploadPng(admin, `${idea.user_id}/${ideaId}-preview.png`, previewBytes),
+    ])
 
-    const result = await openaiResp.json()
-    const b64: string | undefined = result?.data?.[0]?.b64_json
-    if (!b64) {
-      throw new Error('OpenAI hat kein Bild zurückgegeben.')
-    }
-
-    // base64 → Bytes
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-
-    // --- 3) In den Storage-Bucket hochladen ---------------------------------
-    const path = `${idea.user_id}/${ideaId}.png`
-    const { error: uploadError } = await admin.storage
-      .from(SKETCH_BUCKET)
-      .upload(path, bytes, { contentType: 'image/png', upsert: true })
-    if (uploadError) {
-      throw new Error(`Storage-Upload fehlgeschlagen: ${uploadError.message}`)
-    }
-
-    const { data: pub } = admin.storage.from(SKETCH_BUCKET).getPublicUrl(path)
-    const imageUrl = pub.publicUrl
-
-    // --- 4) Ergebnis in die DB zurückschreiben ------------------------------
+    // --- 4) Beide URLs in die DB zurückschreiben ----------------------------
     const { error: updateError } = await admin
       .from('ideas')
-      .update({ image_url: imageUrl, status: 'generated', error: null })
+      .update({
+        concept_sheet_url: conceptUrl,
+        preview_image_url: previewUrl,
+        image_url: conceptUrl, // Abwärtskompatibilität (altes Einzelfeld)
+        status: 'generated',
+        error: null,
+      })
       .eq('id', ideaId)
     if (updateError) {
       throw new Error(`DB-Update fehlgeschlagen: ${updateError.message}`)
     }
 
-    return json({ status: 'generated', image_url: imageUrl })
+    return json({
+      status: 'generated',
+      concept_sheet_url: conceptUrl,
+      preview_image_url: previewUrl,
+    })
   } catch (e) {
     const message = e instanceof Error ? e.message : 'Unbekannter Fehler.'
     // Fehler an der Idee vermerken (best effort – Fehler hier nicht erneut werfen).

@@ -1,14 +1,15 @@
 // ============================================================================
 // Prompt für das technische Konzeptblatt (gpt-image-2)
 // ============================================================================
-// Ziel: KEINE einfache Skizze und kein Werbebild, sondern ein standardisiertes
-// TECHNISCHES KONZEPTBLATT, das Herstellern als erste Planungsgrundlage dient.
-// Jede Ausgabe folgt – unabhängig vom Produkt – exakt demselben professionellen
-// Aufbau, damit alle Blätter auf der Plattform konsistent aussehen.
+// Ziel: KEINE Skizze, KEINE Produktillustration und KEIN fotorealistisches
+// Produktbild. Erzeugt wird ein STANDARDISIERTES TECHNISCHES KONZEPTBLATT im
+// Stil einer professionellen Produktentwicklungs-/Konstruktionsabteilung
+// (CAD-/Industrial-Design-Sheet). Jede Generierung folgt – unabhängig vom
+// Produkt – exakt demselben strikten Aufbau, damit alle Blätter konsistent sind.
 //
-// Der Prompt besteht aus drei Teilen (Reihenfolge bewusst gewählt):
-//   1) SHEET_SPEC      – fixe Layout-/Stilvorgaben des Konzeptblatts (immer gleich)
-//   2) ANALYSIS_STEP   – interne Analyse: offensichtlich fehlende Details ergänzen
+// Aufbau des Prompts (Reihenfolge bewusst gewählt):
+//   1) ENGINEERING_SHEET_SPEC – strikte Layout-/Stil-/Verbotsregeln (immer gleich)
+//   2) ANALYSIS_STEP          – interne Analyse & Strukturierung der Eingabe
 //   3) Produktbeschreibung aus der Nutzereingabe (prompt + Auswahlfelder)
 // ============================================================================
 
@@ -45,36 +46,39 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 // ----------------------------------------------------------------------------
-// 1) Feste Vorgaben für Aufbau & Stil des Konzeptblatts.
-//    Diese Zeilen ändern sich NIE → garantieren ein einheitliches, hochwertiges
-//    Layout für jedes Produkt auf der Plattform.
+// 1) Strikte Vorgaben für das Engineering-Konzeptblatt.
+//    Diese Regeln ändern sich NIE → garantieren ein einheitliches, technisches,
+//    herstellernahes Layout für jedes Produkt auf der Plattform.
 // ----------------------------------------------------------------------------
-const SHEET_SPEC = [
-  'Produce a single, standardized TECHNICAL PRODUCT CONCEPT SHEET — the kind a product-development department prepares as a first planning basis for a manufacturer. It must look like a professional engineering/concept drawing, NOT a marketing render, NOT a photograph, NOT a lifestyle scene.',
+const ENGINEERING_SHEET_SPEC = [
+  'Generate a STANDARDIZED TECHNICAL CONCEPT SHEET in the style of a professional product-development and engineering department (industrial-design / CAD spec sheet). This is a construction-oriented engineering document, NOT a sketch, NOT a product illustration, NOT a marketing render.',
   '',
-  'Use this EXACT, consistent sheet layout for every product, regardless of what the product is:',
-  '- A clean white or very light neutral background, with a calm, uniform technical-sheet layout and generous, balanced spacing (like a spec/concept sheet).',
-  '- ONE LARGE MAIN VIEW as the hero of the sheet: an isometric or three-quarter perspective drawing of the complete product, centered and clearly readable.',
-  '- Smaller SECONDARY ORTHOGRAPHIC VIEWS arranged neatly around or below the main view where they make sense: a FRONT view, a SIDE view and a TOP view, each with a short caption ("Front", "Side", "Top").',
-  '- Consistent, precise technical line work in a CAD / engineering-drawing style: crisp outlines, light construction lines, restrained neutral shading, and a high level of detail.',
+  'DO NOT attempt to create a photorealistic product photo or a rendered product shot. The image must deliberately look like a CAD drawing / industrial technical design sheet: flat technical line work, no realistic materials, no studio photography.',
   '',
-  'Annotations on the drawing:',
-  '- If the description states or clearly implies measurements, draw proper DIMENSION LINES with arrowheads and numeric labels (width, height, depth, key offsets) on the relevant views.',
-  '- If materials are mentioned, clearly LABEL them on the product using thin leader lines and short callouts (e.g. "Oak", "Aluminium", "Stainless steel").',
-  '- Keep all text short, legible and in a uniform technical style; no paragraphs of prose, no logos, no decorative typography, no watermarks.',
+  'Mandatory, fixed layout — apply the SAME structure to every generation, regardless of the product:',
+  '- The entire image must read as a technical engineering / industrial-design concept sheet on a plain white background with no decoration.',
+  '- One LARGE ISOMETRIC main view of the product as the focal element of the sheet.',
+  '- Additionally several smaller ORTHOGRAPHIC views — FRONT, SIDE and TOP — arranged neatly, each with a short caption, wherever they make sense for the product.',
+  '- Clean technical lines and crisp, precise contours (uniform stroke weights, construction/center lines where useful).',
+  '- DIMENSION LINES with arrowheads and numeric labels for ALL measurements the user provided (and for clearly implied key dimensions).',
+  '- MATERIAL CALLOUTS labelling the respective components (e.g. "Oak", "Aluminium", "Stainless steel") via thin leader lines.',
+  '- ARROWS and CALLOUTS pointing to important components / construction features.',
+  '- Consistent, uniform technical typography and a professional, tidy sheet layout.',
   '',
-  'Strictly avoid: people, hands, decorative styling props, room or interior scenes, plants, mood lighting, advertising, and any lifestyle imagery.',
+  'Strictly forbidden (must NOT appear): people; rooms or interiors; lifestyle scenes; advertising; drop shadows, cast shadows or decorative/gradient backgrounds; artistic interpretation; product staging or scenography; photorealistic rendering.',
   '',
-  'The product must be shown completely and unambiguously so a manufacturer can quickly understand the idea and assess its feasibility. Keep the same fundamental layout, line style, level of detail and overall quality for every product, so all concept sheets on the platform look consistent.',
+  'Focus exclusively on construction and manufacturability. The output must look as if a professional product designer prepared it for a first review with a manufacturer, so the manufacturer can immediately understand the concept and assess feasibility.',
+  '',
+  'FALLBACK: If multiple coordinated views cannot be produced reliably, instead produce ONE single, highly detailed technical concept drawing of the product, still including dimension lines, material callouts and labelled components in the same strict technical style.',
 ].join('\n')
 
 // ----------------------------------------------------------------------------
-// 2) Interne Analyse: offensichtlich fehlende technische Details sinnvoll
-//    ergänzen, ohne die eigentliche Idee des Nutzers zu verändern.
+// 2) Interne Analyse & Strukturierung: offensichtlich fehlende technische
+//    Details dürfen ergänzt werden, die eigentliche Idee NIEMALS verändert.
 // ----------------------------------------------------------------------------
 const ANALYSIS_STEP = [
-  'Before drawing, internally analyse the user description and sensibly infer obvious but missing technical details — typical proportions, construction, joints, mounting and plausible standard dimensions and materials — so the sheet is complete and manufacturer-ready.',
-  'Do NOT change, contradict or invent beyond the actual idea: whenever the user specified something (size, material, style, function), respect it exactly; only fill gaps that are clearly implied.',
+  'Before drawing, internally analyse and structure the user input: identify the product, its main components, plausible construction, joints, mounting, proportions and the dimensions/materials that are stated or clearly implied.',
+  'You may add obvious missing technical details to make the sheet complete and manufacturer-ready, but you must NEVER change, contradict or replace the user\'s actual idea. Anything the user explicitly stated (size, material, function, style) must be reproduced exactly.',
 ].join('\n')
 
 export interface IdeaForPrompt {
@@ -93,22 +97,78 @@ function describeProduct(idea: IdeaForPrompt): string {
     lines.push(`Product category: ${CATEGORY_LABELS[idea.category]}.`)
   }
   if (idea.style && STYLE_LABELS[idea.style]) {
-    lines.push(`Design style: ${STYLE_LABELS[idea.style]}.`)
+    lines.push(
+      `Design intent (for proportions/form only, NOT for rendering style): ${STYLE_LABELS[idea.style]}.`,
+    )
   }
   const mats = (idea.materials ?? [])
     .map((m) => MATERIAL_LABELS[m] ?? m)
     .filter(Boolean)
   if (mats.length > 0) {
-    lines.push(`Stated materials (label these on the drawing): ${mats.join(', ')}.`)
+    lines.push(
+      `Stated materials (add material callouts for these on the drawing): ${mats.join(', ')}.`,
+    )
   }
   return lines.join('\n')
 }
 
 /**
- * Baut den vollständigen, internen Prompt: feste Konzeptblatt-Vorgaben +
- * Analyse-Anweisung + Produktdetails. Die festen Vorgaben stehen bewusst zuerst,
- * damit Aufbau und Stil über alle Produkte hinweg dominieren und konsistent sind.
+ * Baut den vollständigen, internen Prompt: strikte Konzeptblatt-Vorgaben +
+ * Analyse-Anweisung + Produktdetails. Die strikten Vorgaben stehen bewusst
+ * zuerst, damit der technische Aufbau über alle Produkte hinweg dominiert.
  */
 export function buildSketchPrompt(idea: IdeaForPrompt): string {
-  return `${SHEET_SPEC}\n\n${ANALYSIS_STEP}\n\n${describeProduct(idea)}`
+  return `${ENGINEERING_SHEET_SPEC}\n\n${ANALYSIS_STEP}\n\n${describeProduct(idea)}`
+}
+
+// ============================================================================
+// Fotorealistische Produktvorschau (NEU)
+// ============================================================================
+// Zweites Bild aus DERSELBEN Nutzereingabe: ein hochwertiges, realistisches
+// Rendering, das zeigt, wie das fertige Produkt ungefähr aussehen könnte.
+// Bewusst KEIN technisches Blatt — und konsistent zum Konzeptblatt (gleiches
+// Produkt, gleiche Form/Proportionen/Materialien).
+// ----------------------------------------------------------------------------
+const PREVIEW_SPEC = [
+  'Generate a single, high-quality PHOTOREALISTIC product visualization (realistic 3D product render) of the product described below. The purpose is to show the user what the finished product could roughly look like.',
+  '',
+  'Requirements:',
+  '- Realistic materials and finishes shown in their natural colors, matching the description (e.g. real oak wood grain, brushed stainless steel, clear glass).',
+  '- Clean studio lighting OR a neutral, bright, seamless background; soft, realistic contact shadows are acceptable, but keep the background plain and undecorated.',
+  '- The product is the SOLE focus, shown completely in an attractive, neutral three-quarter / perspective view.',
+  '- NO dimension lines, NO technical annotations, callouts, leader lines or measurement labels.',
+  '- NO people, NO room or interior scene, NO decorations or props, NO text, NO logos, NO advertising or lifestyle staging.',
+  '',
+  "Keep the product's form, proportions, components and materials consistent with the technical concept sheet generated from the same description, so both images clearly represent the same product.",
+].join('\n')
+
+/**
+ * Produktbeschreibung für die fotorealistische Vorschau. Anders als beim
+ * Konzeptblatt darf der gewählte Stil hier die Ästhetik/Anmutung beeinflussen.
+ */
+function describeProductForPreview(idea: IdeaForPrompt): string {
+  const lines: string[] = []
+  lines.push(`Product description (from the user): ${idea.prompt.trim()}`)
+
+  if (idea.category && CATEGORY_LABELS[idea.category]) {
+    lines.push(`Product category: ${CATEGORY_LABELS[idea.category]}.`)
+  }
+  if (idea.style && STYLE_LABELS[idea.style]) {
+    lines.push(`Design style / aesthetic: ${STYLE_LABELS[idea.style]}.`)
+  }
+  const mats = (idea.materials ?? [])
+    .map((m) => MATERIAL_LABELS[m] ?? m)
+    .filter(Boolean)
+  if (mats.length > 0) {
+    lines.push(`Materials to render realistically: ${mats.join(', ')}.`)
+  }
+  return lines.join('\n')
+}
+
+/**
+ * Baut den Prompt für die fotorealistische Produktvorschau. Nutzt dieselbe
+ * interne Analyse wie das Konzeptblatt, damit beide Bilder konsistent sind.
+ */
+export function buildPreviewPrompt(idea: IdeaForPrompt): string {
+  return `${PREVIEW_SPEC}\n\n${ANALYSIS_STEP}\n\n${describeProductForPreview(idea)}`
 }

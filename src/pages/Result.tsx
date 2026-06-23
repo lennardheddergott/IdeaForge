@@ -97,8 +97,8 @@ export function Result() {
               </span>
             ) : status === 'pending' || (loading && id) ? (
               <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3.5 py-1.5 text-sm font-medium text-amber-600">
-                <Sparkles size={14} className="animate-spin" /> Konzeptblatt
-                wird generiert…
+                <Sparkles size={14} className="animate-spin" /> Bilder werden
+                generiert…
               </span>
             ) : (
               <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3.5 py-1.5 text-sm font-medium text-emerald-600">
@@ -110,7 +110,7 @@ export function Result() {
           <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-balance text-4xl font-semibold leading-[1.05] text-ink-950 sm:text-5xl">
-                {idea ? 'Dein Konzeptblatt' : d.title}
+                {idea ? 'Dein Design' : d.title}
               </h1>
               <p className="mt-3 text-lg text-ink-500">
                 {idea ? idea.prompt : d.tagline}
@@ -380,7 +380,7 @@ function SketchView({
       <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-2xl border border-ink-100 bg-white shadow-lift">
         <Sparkles size={28} className="animate-spin text-accent-600" />
         <p className="text-sm text-ink-500">
-          Dein technisches Konzeptblatt wird erzeugt…
+          Deine Produktvorschau &amp; dein Konzeptblatt werden erzeugt…
         </p>
       </div>
     )
@@ -391,7 +391,7 @@ function SketchView({
     return (
       <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-2xl border border-red-100 bg-red-50/60 p-6 text-center">
         <p className="text-sm font-medium text-red-700">
-          Das Konzeptblatt konnte nicht generiert werden.
+          Die Bilder konnten nicht generiert werden.
         </p>
         {idea.error && (
           <p className="max-w-md text-xs text-red-500">{idea.error}</p>
@@ -404,30 +404,62 @@ function SketchView({
     )
   }
 
-  // Erfolgreich → generiertes Konzeptblatt anzeigen (klickbar in voller Auflösung,
-  // damit Maß- und Materialbeschriftungen lesbar sind).
-  if (idea.image_url) {
+  // Erfolgreich → zuerst die fotorealistische Vorschau, darunter das Konzeptblatt.
+  // (concept_sheet_url fällt für ältere Ideen auf image_url zurück.)
+  const previewUrl = idea.preview_image_url
+  const conceptUrl = idea.concept_sheet_url ?? idea.image_url
+  if (previewUrl || conceptUrl) {
     return (
-      <figure className="flex flex-col gap-2">
-        <a
-          href={idea.image_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group block"
-        >
-          <img
-            src={idea.image_url}
-            alt="Technisches Konzeptblatt"
-            className="aspect-[4/3] w-full rounded-2xl border border-ink-100 bg-white object-contain p-2 shadow-lift transition-shadow group-hover:shadow-float"
+      <div className="flex flex-col gap-6">
+        {previewUrl && (
+          <SheetFigure
+            src={previewUrl}
+            alt="Fotorealistische Produktvorschau"
+            caption="Fotorealistische Produktvorschau · zum Vergrößern anklicken"
           />
-        </a>
-        <figcaption className="text-center text-xs text-ink-400">
-          Technisches Konzeptblatt · zum Vergrößern anklicken
-        </figcaption>
-      </figure>
+        )}
+        {conceptUrl && (
+          <SheetFigure
+            src={conceptUrl}
+            alt="Technisches Konzeptblatt"
+            caption="Technisches Konzeptblatt · zum Vergrößern anklicken"
+          />
+        )}
+      </div>
     )
   }
 
   // Fallback (sollte praktisch nicht eintreten).
   return <RenderingPlaceholder variant="cabinet" className="shadow-lift" />
+}
+
+/** Ein generiertes Bild: klickbar in voller Auflösung, mit Bildunterschrift. */
+function SheetFigure({
+  src,
+  alt,
+  caption,
+}: {
+  src: string
+  alt: string
+  caption: string
+}) {
+  return (
+    <figure className="flex flex-col gap-2">
+      <a
+        href={src}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group block"
+      >
+        <img
+          src={src}
+          alt={alt}
+          className="aspect-[4/3] w-full rounded-2xl border border-ink-100 bg-white object-contain p-2 shadow-lift transition-shadow group-hover:shadow-float"
+        />
+      </a>
+      <figcaption className="text-center text-xs text-ink-400">
+        {caption}
+      </figcaption>
+    </figure>
+  )
 }

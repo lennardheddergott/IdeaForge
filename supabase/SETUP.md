@@ -53,10 +53,9 @@ Function-Secret — niemals im Frontend (`.env.local`/`VITE_*`).
 > Bei einer **frischen** Installation ist alles schon in `schema.sql` enthalten —
 > dann überspringen.
 
-**SQL Editor → New query** → Inhalt von
-[`migrations/0001_image_generation.sql`](./migrations/0001_image_generation.sql)
-einfügen → **Run**. Das ergänzt die Status-Werte `pending`/`failed`, die Spalten
-`image_url`/`error` und den öffentlichen Bucket `idea-sketches`.
+**SQL Editor → New query** → die Migrationen **in Reihenfolge** einfügen und je **Run**:
+1. [`migrations/0001_image_generation.sql`](./migrations/0001_image_generation.sql) — Status-Werte `pending`/`failed`, Spalten `image_url`/`error`, Bucket `idea-sketches`.
+2. [`migrations/0002_preview_image.sql`](./migrations/0002_preview_image.sql) — Spalten `concept_sheet_url` (Konzeptblatt) und `preview_image_url` (fotorealistische Vorschau).
 
 ### 5.2 Supabase CLI installieren & Projekt verknüpfen
 
@@ -98,10 +97,13 @@ npm run dev
 
 1. `/login` öffnen → **Registrieren** → Konto anlegen.
 2. Auf `/create` eine Idee beschreiben und **Design generieren**.
-   Die Idee wird mit Status `pending` gespeichert, die Function erzeugt die
-   Skizze und setzt den Status auf `generated` (bei Fehlern `failed`).
-3. In Supabase prüfen: **Table Editor → ideas** (Status + `image_url`),
-   die Skizze liegt unter **Storage → idea-sketches → <deine user_id>**,
+   Die Idee wird mit Status `pending` gespeichert, die Function erzeugt **zwei
+   Bilder** (fotorealistische Vorschau + technisches Konzeptblatt) und setzt den
+   Status auf `generated` (bei Fehlern `failed`). Auf der Ergebnisseite erscheint
+   oben die Vorschau, darunter das Konzeptblatt – beide per Klick in voller Auflösung.
+3. In Supabase prüfen: **Table Editor → ideas** (Status + `preview_image_url`
+   + `concept_sheet_url`); die beiden PNGs liegen unter
+   **Storage → idea-sketches → <deine user_id>** (`…-preview.png` / `…-concept.png`),
    Inspirationsbilder unter **Storage → idea-images → <deine user_id>**.
 
 ## Hinweise

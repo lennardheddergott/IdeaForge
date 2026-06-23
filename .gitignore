@@ -16,6 +16,9 @@ dist-ssr
 .env
 supabase/functions/.env
 
+# Von der Supabase-CLI generierte Hilfsdateien (kein Quellcode)
+supabase/.temp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

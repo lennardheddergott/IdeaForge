@@ -11,7 +11,36 @@ export interface IdeaInput {
 }
 
 /** Lebenszyklus der KI-Bildgenerierung (vgl. schema.sql). */
-export type IdeaStatus = 'draft' | 'pending' | 'generated' | 'failed'
+export type IdeaStatus =
+  | 'draft'
+  | 'pending'
+  | 'generated'
+  | 'failed'
+  | 'rejected' // themenfremde Eingabe (kein Möbelstück)
+
+/** Strukturierte Produktspezifikation (von der Edge Function erzeugt). */
+export interface ProductSpec {
+  ist_moebel: boolean
+  ablehnung?: string
+  titel: string
+  kategorie: string
+  kurzbeschreibung: string
+  masse: {
+    breite_cm?: number | null
+    hoehe_cm?: number | null
+    tiefe_cm?: number | null
+    weitere?: { label: string; wert: string }[]
+  }
+  materialien: { bauteil: string; material: string }[]
+  farben: string[]
+  bauteile: string[]
+  anzahl_bauteile: number
+  konstruktion: string
+  besondere_details: string[]
+  komplexitaet: 'niedrig' | 'mittel' | 'hoch'
+  fertigungsaufwand_stunden: number
+  preis: { min: number; max: number; waehrung: string; hinweis: string }
+}
 
 /** Eine in der DB gespeicherte Idee. */
 export interface Idea {
@@ -30,8 +59,10 @@ export interface Idea {
   concept_sheet_url: string | null
   /** Öffentliche URL der fotorealistischen Produktvorschau (null, solange nicht fertig). */
   preview_image_url: string | null
-  /** Fehlerursache, falls status === 'failed'. */
+  /** Fehlerursache (status 'failed') bzw. freundliche Ablehnung (status 'rejected'). */
   error: string | null
+  /** Strukturierte KI-Spezifikation (Quelle für Preis & Anzeige); null bis fertig. */
+  concept: ProductSpec | null
   created_at: string
 }
 
@@ -94,6 +125,7 @@ export async function requestSketch(ideaId: string): Promise<Idea> {
     status: IdeaStatus
     concept_sheet_url?: string
     preview_image_url?: string
+    message?: string
     error?: string
   }>('generate-sketch', { body: { ideaId } })
 
@@ -107,6 +139,8 @@ export async function requestSketch(ideaId: string): Promise<Idea> {
   if (data?.status === 'failed') {
     throw new Error(data.error ?? 'Bildgenerierung fehlgeschlagen.')
   }
+  // 'rejected' (themenfremd) ist KEIN Fehler – die aktualisierte Idee
+  // (status 'rejected' + freundliche Meldung in error) wird normal geladen.
 
   return getIdea(ideaId)
 }

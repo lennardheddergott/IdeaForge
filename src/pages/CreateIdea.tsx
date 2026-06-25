@@ -34,6 +34,8 @@ export function CreateIdea() {
   const [images, setImages] = useState<File[]>([])
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Freundlicher Hinweis, wenn die Eingabe kein Möbelstück ist (status 'rejected').
+  const [rejection, setRejection] = useState<string | null>(null)
 
   const toggleMat = (id: string) =>
     setMats((prev) =>
@@ -52,6 +54,7 @@ export function CreateIdea() {
       return
     }
     setError(null)
+    setRejection(null)
     setGenerating(true)
     try {
       // 1) Idee speichern (status 'pending', user_id + Zeitstempel in der DB).
@@ -63,9 +66,17 @@ export function CreateIdea() {
         budget,
         images,
       })
-      // 2) KI-Konzeptskizze erzeugen lassen (OpenAI via Edge Function).
-      //    Die Function schreibt image_url + Status zurück in die DB.
-      await requestSketch(idea.id)
+      // 2) KI-Pipeline: Analyse → (Möbel?) → Bilder + Konzeptblatt + Preis.
+      const updated = await requestSketch(idea.id)
+      // 2a) Themenfremde Eingabe → freundlich hinweisen, NICHT weiterleiten.
+      if (updated.status === 'rejected') {
+        setGenerating(false)
+        setRejection(
+          updated.error ??
+            'IdeaForge ist aktuell ausschließlich auf die Entwicklung und Anfertigung von Möbelstücken spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.',
+        )
+        return
+      }
       // 3) Ergebnis anzeigen.
       navigate(`/result/${idea.id}`)
     } catch (e) {
@@ -238,6 +249,12 @@ export function CreateIdea() {
             <p className="mb-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
             </p>
+          )}
+          {rejection && (
+            <div className="mb-3 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              <Sparkles size={16} className="mt-0.5 shrink-0 text-amber-500" />
+              <span>{rejection}</span>
+            </div>
           )}
           <div className="glass flex flex-col items-center justify-between gap-4 rounded-2xl border border-ink-100 p-4 shadow-lift sm:flex-row sm:px-6">
             <p className="text-sm text-ink-500">

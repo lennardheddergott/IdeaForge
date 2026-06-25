@@ -37,6 +37,9 @@ create table if not exists public.profiles (
   id          uuid primary key references auth.users (id) on delete cascade,
   full_name   text,
   avatar_url  text,
+  -- Rolle: bestimmt den App-Pfad (Kundenbereich vs. Hersteller-Dashboard).
+  role        text not null default 'customer'
+              check (role in ('customer', 'manufacturer')),
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -70,9 +73,15 @@ returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
+declare
+  meta_role text := new.raw_user_meta_data ->> 'role';
 begin
-  insert into public.profiles (id, full_name)
-  values (new.id, new.raw_user_meta_data ->> 'full_name')
+  insert into public.profiles (id, full_name, role)
+  values (
+    new.id,
+    new.raw_user_meta_data ->> 'full_name',
+    case when meta_role in ('customer', 'manufacturer') then meta_role else 'customer' end
+  )
   on conflict (id) do nothing;
   return new;
 end;
@@ -106,8 +115,9 @@ create table if not exists public.ideas (
   -- Budget (optional): NULL = keine Angabe; speichert die Budget-Stufen-id aus options.ts
   budget      text,                                  -- options.ts → budgets.id (z. B. 'b3')
   image_paths text[] not null default '{}',          -- Inspirationsbilder im Bucket 'idea-images'
+  -- 'rejected' = themenfremde Eingabe (kein Möbelstück); keine Generierung.
   status      text not null default 'draft'
-              check (status in ('draft', 'pending', 'generated', 'failed')),
+              check (status in ('draft', 'pending', 'generated', 'failed', 'rejected')),
   -- Öffentliche URLs der von gpt-image erzeugten Bilder (Bucket 'idea-sketches'):
   image_url          text,  -- Abwärtskompatibilität: gespiegelt = concept_sheet_url
   concept_sheet_url  text,  -- technisches Engineering-/CAD-Konzeptblatt
@@ -271,6 +281,164 @@ create policy "requests: update own"
 drop policy if exists "requests: delete own" on public.manufacturer_requests;
 create policy "requests: delete own"
   on public.manufacturer_requests for delete using (auth.uid() = user_id);
+
+
+-- ----------------------------------------------------------------------------
+-- 6b) manufacturer_profiles  —  Unternehmensdaten eines Herstellers
+-- ----------------------------------------------------------------------------
+-- 1:1 zu einem Hersteller-Nutzer (user_id unique). Entspricht dem
+-- Onboarding-Formular in src/pages/ManufacturerOnboarding.tsx. Öffentlich
+-- lesbar (späteres Hersteller-Matching), aber nur vom Eigentümer schreibbar.
+create table if not exists public.manufacturer_profiles (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null unique references auth.users (id) on delete cascade,
+  company_name      text not null,                       -- Unternehmensname
+  contact_person    text,                                -- Ansprechpartner
+  email             text,                                -- Kontakt-E-Mail
+  phone             text,                                -- Telefonnummer
+  website           text,                                -- Website (optional)
+  address           text,                                -- Adresse / Straße
+  postal_code       text,                                -- PLZ
+  city              text,                                -- Stadt
+  country           text,                                -- Land
+  company_type      text,                                -- Art (Tischlerei, Metallbau, …)
+  specializations   text[] not null default '{}',        -- Tische, Schränke, Regale, …
+  materials         text[] not null default '{}',        -- Massivholz, MDF, Metall, Glas, …
+  service_area      text,                                -- Liefergebiet / Region
+  description       text,                                -- Beschreibung des Unternehmens
+  monthly_capacity  int,                                 -- Kapazität pro Monat (optional)
+  avg_lead_time     text,                                -- durchschn. Bearbeitungszeit (optional)
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index if not exists manufacturer_profiles_user_id_idx
+  on public.manufacturer_profiles (user_id);
+
+alter table public.manufacturer_profiles enable row level security;
+
+drop policy if exists "manufacturer_profiles: public read" on public.manufacturer_profiles;
+create policy "manufacturer_profiles: public read"
+  on public.manufacturer_profiles for select using (true);
+
+drop policy if exists "manufacturer_profiles: insert own" on public.manufacturer_profiles;
+create policy "manufacturer_profiles: insert own"
+  on public.manufacturer_profiles for insert with check (auth.uid() = user_id);
+
+drop policy if exists "manufacturer_profiles: update own" on public.manufacturer_profiles;
+create policy "manufacturer_profiles: update own"
+  on public.manufacturer_profiles for update
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "manufacturer_profiles: delete own" on public.manufacturer_profiles;
+create policy "manufacturer_profiles: delete own"
+  on public.manufacturer_profiles for delete using (auth.uid() = user_id);
+
+drop trigger if exists trg_manufacturer_profiles_updated_at on public.manufacturer_profiles;
+create trigger trg_manufacturer_profiles_updated_at
+  before update on public.manufacturer_profiles
+  for each row execute function public.set_updated_at();
+
+
+-- ----------------------------------------------------------------------------
+-- 6c) orders  —  Aufträge (Kunde → optional Hersteller)
+-- ----------------------------------------------------------------------------
+-- Entsteht aus einer Idee, wenn der Kunde "Jetzt anfertigen lassen" klickt.
+-- manufacturer_id bleibt zunächst NULL (noch keine automatische Zuordnung).
+-- Status-Lebenszyklus:
+--   submitted     – vom Kunden eingereicht (Standard)
+--   assigned      – einem Hersteller zugewiesen
+--   accepted      – vom Hersteller angenommen
+--   rejected      – vom Hersteller abgelehnt
+--   in_production – in Fertigung
+--   completed     – abgeschlossen
+create table if not exists public.orders (
+  id                 uuid primary key default gen_random_uuid(),
+  customer_id        uuid not null references auth.users (id) on delete cascade,
+  manufacturer_id    uuid references public.manufacturer_profiles (id) on delete set null,
+  idea_id            uuid references public.ideas (id) on delete set null,
+  description        text not null,                       -- ursprüngliche Nutzerbeschreibung
+  concept_sheet_url  text,                                -- Konzeptblatt
+  preview_image_url  text,                                -- Visualisierung (optional)
+  concept            jsonb,                               -- optionales strukturiertes KI-Ergebnis
+  status             text not null default 'submitted'
+                     check (status in ('submitted', 'assigned', 'accepted',
+                                       'rejected', 'in_production', 'completed')),
+  created_at         timestamptz not null default now(),
+  updated_at         timestamptz not null default now()
+);
+
+create index if not exists orders_customer_id_idx     on public.orders (customer_id);
+create index if not exists orders_manufacturer_id_idx on public.orders (manufacturer_id);
+create index if not exists orders_status_idx          on public.orders (status);
+
+alter table public.orders enable row level security;
+
+-- Kunde: volle Kontrolle über die EIGENEN Aufträge.
+drop policy if exists "orders: customer select own" on public.orders;
+create policy "orders: customer select own"
+  on public.orders for select using (auth.uid() = customer_id);
+
+drop policy if exists "orders: customer insert own" on public.orders;
+create policy "orders: customer insert own"
+  on public.orders for insert with check (auth.uid() = customer_id);
+
+drop policy if exists "orders: customer update own" on public.orders;
+create policy "orders: customer update own"
+  on public.orders for update
+  using (auth.uid() = customer_id) with check (auth.uid() = customer_id);
+
+-- Hersteller: sieht zugewiesene Aufträge + offenen "submitted"-Pool, damit der
+-- Bereich "Neue Aufträge" auch ohne automatische Zuordnung Sinn ergibt.
+drop policy if exists "orders: manufacturer select" on public.orders;
+create policy "orders: manufacturer select"
+  on public.orders for select
+  using (
+    exists (
+      select 1 from public.manufacturer_profiles mp
+      where mp.id = orders.manufacturer_id and mp.user_id = auth.uid()
+    )
+    or (
+      orders.manufacturer_id is null
+      and orders.status = 'submitted'
+      and exists (
+        select 1 from public.profiles p
+        where p.id = auth.uid() and p.role = 'manufacturer'
+      )
+    )
+  );
+
+-- Hersteller darf einen Pool-Auftrag an sich ziehen ODER seine eigenen
+-- zugewiesenen Aufträge aktualisieren. WITH CHECK erzwingt, dass das Ergebnis
+-- dem eigenen Unternehmensprofil gehört.
+drop policy if exists "orders: manufacturer update" on public.orders;
+create policy "orders: manufacturer update"
+  on public.orders for update
+  using (
+    exists (
+      select 1 from public.manufacturer_profiles mp
+      where mp.id = orders.manufacturer_id and mp.user_id = auth.uid()
+    )
+    or (
+      orders.manufacturer_id is null
+      and orders.status = 'submitted'
+      and exists (
+        select 1 from public.profiles p
+        where p.id = auth.uid() and p.role = 'manufacturer'
+      )
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.manufacturer_profiles mp
+      where mp.id = orders.manufacturer_id and mp.user_id = auth.uid()
+    )
+  );
+
+drop trigger if exists trg_orders_updated_at on public.orders;
+create trigger trg_orders_updated_at
+  before update on public.orders
+  for each row execute function public.set_updated_at();
 
 
 -- ============================================================================

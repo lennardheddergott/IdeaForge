@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Lock, Mail, Sparkles, User } from 'lucide-react'
+import { Factory, Lock, Mail, ShoppingBag, Sparkles, User } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
 import { Reveal } from '@/components/ui/Reveal'
 import { useAuth } from '@/context/AuthContext'
+import { getMyProfile, homeForRole, type UserRole } from '@/lib/profile'
+import { cn } from '@/lib/utils'
 
 type Mode = 'signin' | 'signup'
 
@@ -12,15 +14,26 @@ export function Login() {
   const { signIn, signUp } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard'
+  const from = (location.state as { from?: string } | null)?.from ?? null
 
   const [mode, setMode] = useState<Mode>('signin')
+  const [role, setRole] = useState<UserRole>('customer')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
+  // Zielroute nach erfolgreicher Anmeldung – abhängig von der Rolle.
+  const goAfterAuth = (userRole: UserRole) => {
+    if (userRole === 'manufacturer') {
+      // Hersteller landen im Dashboard (das ggf. ins Onboarding weiterleitet).
+      navigate('/manufacturer', { replace: true })
+    } else {
+      navigate(from ?? homeForRole('customer'), { replace: true })
+    }
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,6 +46,7 @@ export function Login() {
           email,
           password,
           fullName,
+          role,
         )
         if (error) return setError(translate(error))
         if (needsConfirmation) {
@@ -41,11 +55,13 @@ export function Login() {
           )
           return
         }
-        navigate(from, { replace: true })
+        goAfterAuth(role)
       } else {
         const { error } = await signIn(email, password)
         if (error) return setError(translate(error))
-        navigate(from, { replace: true })
+        // Rolle frisch aus dem Profil lesen, um korrekt zu routen.
+        const profile = await getMyProfile()
+        goAfterAuth(profile?.role ?? 'customer')
       }
     } finally {
       setBusy(false)
@@ -68,19 +84,38 @@ export function Login() {
             <p className="mt-2 text-ink-500">
               {mode === 'signin'
                 ? 'Melde dich an, um deine Ideen zu speichern und zu verwalten.'
-                : 'Erstelle ein Konto, um deine Ideen dauerhaft zu sichern.'}
+                : 'Erstelle ein Konto – als Kunde oder als Hersteller.'}
             </p>
 
             <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
               {mode === 'signup' && (
-                <InputField
-                  icon={User}
-                  type="text"
-                  placeholder="Name"
-                  value={fullName}
-                  onChange={setFullName}
-                  autoComplete="name"
-                />
+                <>
+                  {/* Rollenauswahl */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <RoleCard
+                      active={role === 'customer'}
+                      onClick={() => setRole('customer')}
+                      icon={ShoppingBag}
+                      title="Ich bin Kunde"
+                      hint="Ideen erstellen & anfertigen lassen"
+                    />
+                    <RoleCard
+                      active={role === 'manufacturer'}
+                      onClick={() => setRole('manufacturer')}
+                      icon={Factory}
+                      title="Ich bin Hersteller"
+                      hint="Aufträge erhalten & umsetzen"
+                    />
+                  </div>
+                  <InputField
+                    icon={User}
+                    type="text"
+                    placeholder={role === 'manufacturer' ? 'Dein Name' : 'Name'}
+                    value={fullName}
+                    onChange={setFullName}
+                    autoComplete="name"
+                  />
+                </>
               )}
               <InputField
                 icon={Mail}
@@ -156,6 +191,51 @@ function translate(message: string): string {
   if (/password should be at least/i.test(message))
     return 'Das Passwort muss mindestens 6 Zeichen lang sein.'
   return message
+}
+
+function RoleCard({
+  active,
+  onClick,
+  icon: Icon,
+  title,
+  hint,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ComponentType<{ size?: number; className?: string }>
+  title: string
+  hint: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex flex-col gap-1.5 rounded-2xl border p-4 text-left transition-all duration-200',
+        active
+          ? 'border-accent-600 bg-accent-50 ring-1 ring-accent-600'
+          : 'border-ink-200 bg-white hover:border-ink-300 hover:shadow-soft',
+      )}
+    >
+      <span
+        className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-lg',
+          active ? 'bg-accent-600 text-white' : 'bg-ink-100 text-ink-600',
+        )}
+      >
+        <Icon size={16} />
+      </span>
+      <span
+        className={cn(
+          'text-sm font-semibold',
+          active ? 'text-accent-700' : 'text-ink-900',
+        )}
+      >
+        {title}
+      </span>
+      <span className="text-xs text-ink-400">{hint}</span>
+    </button>
+  )
 }
 
 function InputField({

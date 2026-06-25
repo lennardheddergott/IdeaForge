@@ -1,4 +1,7 @@
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
+  ArrowRight,
   ArrowUpRight,
   Bookmark,
   CheckCircle2,
@@ -6,6 +9,7 @@ import {
   Clock,
   FolderOpen,
   Inbox,
+  Package,
   Plus,
   Sparkles,
 } from 'lucide-react'
@@ -14,6 +18,7 @@ import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Reveal } from '@/components/ui/Reveal'
 import { RenderingPlaceholder } from '@/components/ui/RenderingPlaceholder'
+import { Toast } from '@/components/ui/Toast'
 import { cn, formatEUR } from '@/lib/utils'
 import {
   projects,
@@ -22,6 +27,13 @@ import {
   statusMeta,
   timeline,
 } from '@/data/projects'
+import {
+  customerOrderBadge,
+  customerOrderStatus,
+  listMyOrders,
+  type Order,
+  type OrderStatus,
+} from '@/lib/orders'
 
 const stats = [
   { label: 'Aktive Projekte', value: '4', icon: FolderOpen },
@@ -33,6 +45,46 @@ const stats = [
 const recentVariants = ['cabinet', 'table', 'lamp'] as const
 
 export function Dashboard() {
+  const [orders, setOrders] = useState<Order[] | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  // Letzter bekannter Status je Auftrag – um Statuswechsel zu erkennen.
+  const prevStatuses = useRef<Map<string, OrderStatus>>(new Map())
+
+  // Aufträge laden und alle 8 s automatisch aktualisieren (Live-Status).
+  useEffect(() => {
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const load = async () => {
+      try {
+        const data = await listMyOrders()
+        if (cancelled) return
+        // Statuswechsel seit dem letzten Laden → Benachrichtigung anzeigen.
+        const prev = prevStatuses.current
+        if (prev.size > 0) {
+          for (const o of data) {
+            const before = prev.get(o.id)
+            if (before && before !== o.status) {
+              setToast(customerOrderStatus(o.status).title)
+              break
+            }
+          }
+        }
+        prevStatuses.current = new Map(data.map((o) => [o.id, o.status]))
+        setOrders(data)
+      } catch {
+        if (!cancelled) setOrders((cur) => cur ?? [])
+      } finally {
+        if (!cancelled) timer = setTimeout(load, 8000)
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+  }, [])
+
   return (
     <div className="relative">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b from-cream to-white" />
@@ -71,6 +123,76 @@ export function Dashboard() {
             </Reveal>
           ))}
         </div>
+
+        {/* echte Aufträge (Live-Status aus der DB) */}
+        <Reveal>
+          <Card className="mt-8 p-7">
+            <div className="flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
+                <Package size={18} className="text-accent-600" /> Deine Aufträge
+              </h2>
+              <Button to="/create" variant="secondary" size="sm">
+                <Plus size={16} /> Neue Idee
+              </Button>
+            </div>
+
+            {orders === null ? (
+              <p className="mt-5 text-sm text-ink-400">Lädt …</p>
+            ) : orders.length === 0 ? (
+              <p className="mt-5 text-sm text-ink-400">
+                Noch keine Aufträge. Erstelle eine Idee und klicke auf „Jetzt
+                anfertigen lassen“, um einen Auftrag zu veröffentlichen.
+              </p>
+            ) : (
+              <div className="mt-5 flex flex-col gap-3">
+                {orders.map((o) => {
+                  const badge = customerOrderBadge[o.status]
+                  const info = customerOrderStatus(o.status)
+                  const thumb = o.preview_image_url ?? o.concept_sheet_url
+                  return (
+                    <div
+                      key={o.id}
+                      className="flex gap-4 rounded-2xl border border-ink-100 p-4 transition-colors hover:border-ink-200 hover:bg-ink-50/40"
+                    >
+                      <div className="hidden h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-ink-100 bg-ink-50 sm:block">
+                        {thumb ? (
+                          <img src={thumb} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center text-ink-300">
+                            <Package size={20} />
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="line-clamp-2 text-sm text-ink-700">
+                            {o.description}
+                          </p>
+                          <span
+                            className={cn(
+                              'shrink-0 rounded-full px-2.5 py-1 text-xs font-medium',
+                              badge.color,
+                            )}
+                          >
+                            {badge.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-ink-400">{info.title}</p>
+                        <Link
+                          to={`/orders/${o.id}`}
+                          className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-accent-600 hover:text-accent-700"
+                        >
+                          Details ansehen
+                          <ArrowRight size={13} />
+                        </Link>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </Card>
+        </Reveal>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[1.5fr_1fr]">
           {/* projects */}
@@ -289,6 +411,8 @@ export function Dashboard() {
           </div>
         </Reveal>
       </Container>
+
+      <Toast message={toast} tone="info" onClose={() => setToast(null)} />
     </div>
   )
 }

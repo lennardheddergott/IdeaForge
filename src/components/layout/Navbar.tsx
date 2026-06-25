@@ -7,11 +7,16 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { Logo } from './Logo'
 
-const links = [
+const customerLinks = [
   { to: '/create', label: 'Idee erstellen' },
   { to: '/manufacturers', label: 'Hersteller' },
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/profile', label: 'Profil' },
+]
+
+const manufacturerLinks = [
+  { to: '/manufacturer', label: 'Dashboard' },
+  { to: '/manufacturer/onboarding', label: 'Unternehmensdaten' },
 ]
 
 export function Navbar() {
@@ -19,7 +24,14 @@ export function Navbar() {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, signOut } = useAuth()
+  const { user, role, signOut } = useAuth()
+
+  const isManufacturer = role === 'manufacturer'
+  const links = isManufacturer ? manufacturerLinks : customerLinks
+  // Primärer CTA: Hersteller → eigenes Dashboard, sonst → Idee erstellen.
+  const cta = isManufacturer
+    ? { to: '/manufacturer', label: 'Dashboard' }
+    : { to: '/create', label: 'Jetzt starten' }
 
   const handleSignOut = async () => {
     await signOut()
@@ -85,8 +97,8 @@ export function Navbar() {
                 Anmelden
               </Link>
             )}
-            <Button to="/create" size="sm">
-              Jetzt starten
+            <Button to={cta.to} size="sm">
+              {cta.label}
             </Button>
           </div>
 
@@ -141,8 +153,8 @@ export function Navbar() {
                   Anmelden
                 </NavLink>
               )}
-              <Button to="/create" size="md" className="w-full">
-                Jetzt starten
+              <Button to={cta.to} size="md" className="w-full">
+                {cta.label}
               </Button>
             </div>
           </motion.div>

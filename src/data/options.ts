@@ -44,6 +44,40 @@ export const budgets: Option[] = [
   { id: 'b4', label: '4.000 €+', hint: 'Maßanfertigung & Einbau' },
 ]
 
+/* ── Optionen für das Hersteller-Onboarding ── */
+
+/** Art des Unternehmens. */
+export const companyTypes: Option[] = [
+  { id: 'carpentry', label: 'Tischlerei' },
+  { id: 'metalwork', label: 'Metallbau' },
+  { id: 'upholstery', label: 'Polsterei' },
+  { id: 'furniture', label: 'Möbelbau' },
+  { id: 'joinery', label: 'Schreinerei' },
+  { id: 'other', label: 'Sonstiges' },
+]
+
+/** Spezialisierungen (Mehrfachauswahl). */
+export const specializations: Option[] = [
+  { id: 'tables', label: 'Tische' },
+  { id: 'cabinets', label: 'Schränke' },
+  { id: 'shelves', label: 'Regale' },
+  { id: 'kitchen', label: 'Küchenmöbel' },
+  { id: 'beds', label: 'Betten' },
+  { id: 'seating', label: 'Sitzmöbel' },
+  { id: 'builtin', label: 'Einbaumöbel' },
+]
+
+/** Verarbeitbare Materialien (Mehrfachauswahl). */
+export const manufacturerMaterials: Option[] = [
+  { id: 'solidwood', label: 'Massivholz' },
+  { id: 'mdf', label: 'MDF' },
+  { id: 'metal', label: 'Metall' },
+  { id: 'glass', label: 'Glas' },
+  { id: 'veneer', label: 'Furnier' },
+  { id: 'stone', label: 'Stein / Marmor' },
+  { id: 'textile', label: 'Textil / Polster' },
+]
+
 export const promptExamples = [
   'Entwirf mir einen beigen Einbauschrank mit Glasfront und indirekter LED-Beleuchtung.',
   'Ich hätte gerne einen modernen Esstisch aus Eiche und schwarzem Stahl.',

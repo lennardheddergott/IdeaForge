@@ -8,6 +8,10 @@ import { Result } from '@/pages/Result'
 import { Manufacturers } from '@/pages/Manufacturers'
 import { Dashboard } from '@/pages/Dashboard'
 import { Profile } from '@/pages/Profile'
+import { OrderDetail } from '@/pages/OrderDetail'
+import { ManufacturerOnboarding } from '@/pages/ManufacturerOnboarding'
+import { ManufacturerDashboard } from '@/pages/ManufacturerDashboard'
+import { ManufacturerOrderDetail } from '@/pages/ManufacturerOrderDetail'
 
 function App() {
   return (
@@ -18,13 +22,21 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/manufacturers" element={<Manufacturers />} />
 
-        {/* Nur für eingeloggte Nutzer */}
-        <Route element={<ProtectedRoute />}>
+        {/* Nur für eingeloggte Kunden */}
+        <Route element={<ProtectedRoute role="customer" />}>
           <Route path="/create" element={<CreateIdea />} />
           <Route path="/result" element={<Result />} />
           <Route path="/result/:id" element={<Result />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/orders/:id" element={<OrderDetail />} />
           <Route path="/profile" element={<Profile />} />
+        </Route>
+
+        {/* Nur für eingeloggte Hersteller */}
+        <Route element={<ProtectedRoute role="manufacturer" />}>
+          <Route path="/manufacturer/onboarding" element={<ManufacturerOnboarding />} />
+          <Route path="/manufacturer" element={<ManufacturerDashboard />} />
+          <Route path="/manufacturer/orders/:id" element={<ManufacturerOrderDetail />} />
         </Route>
       </Route>
     </Routes>

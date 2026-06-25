@@ -14,3 +14,12 @@ export function formatEUR(value: number) {
     maximumFractionDigits: 0,
   }).format(value)
 }
+
+/** Format an ISO date string as a German long date (e.g. 25. Juni 2026). */
+export function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('de-DE', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}

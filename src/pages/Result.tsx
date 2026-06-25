@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import {
   ArrowRight,
   Box,
   Check,
+  CheckCircle2,
   Factory,
+  Hammer,
   Layers,
   Leaf,
   Ruler,
@@ -19,6 +21,12 @@ import { Reveal } from '@/components/ui/Reveal'
 import { RenderingPlaceholder } from '@/components/ui/RenderingPlaceholder'
 import { designConcept as d } from '@/data/projects'
 import { getIdea, requestSketch, type Idea } from '@/lib/ideas'
+import {
+  createOrder,
+  customerOrderStatus,
+  getOrderByIdea,
+  type Order,
+} from '@/lib/orders'
 import { formatEUR } from '@/lib/utils'
 import { cn } from '@/lib/utils'
 
@@ -35,6 +43,10 @@ export function Result() {
   const [idea, setIdea] = useState<Idea | null>(null)
   const [loading, setLoading] = useState(Boolean(id))
   const [retrying, setRetrying] = useState(false)
+  // Auftrag aus dieser Idee ("Jetzt anfertigen lassen").
+  const [ordering, setOrdering] = useState(false)
+  const [order, setOrder] = useState<Order | null>(null)
+  const [orderError, setOrderError] = useState<string | null>(null)
 
   // Idee laden; solange die Skizze noch generiert wird ('pending'), nachpollen.
   useEffect(() => {
@@ -82,7 +94,90 @@ export function Result() {
     }
   }
 
+  // 1) Bestehenden Auftrag zur Idee einmalig laden, sobald sie fertig ist.
+  useEffect(() => {
+    if (!idea || idea.status !== 'generated') return
+    let cancelled = false
+    getOrderByIdea(idea.id)
+      .then((o) => {
+        if (!cancelled) setOrder(o)
+      })
+      .catch(() => {
+        /* Auftragsanzeige ist optional */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [idea])
+
+  // 2) Solange der Auftrag offen ('submitted') ist, Status nachpollen –
+  //    so wird eine Annahme durch einen Hersteller live sichtbar. Greift auch
+  //    direkt nach dem Klick auf "Jetzt anfertigen lassen".
+  useEffect(() => {
+    const ideaId = idea?.id
+    if (!ideaId || order?.status !== 'submitted') return
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const next = await getOrderByIdea(ideaId)
+        if (!cancelled) setOrder(next)
+      } catch {
+        /* ignorieren */
+      }
+    }, 4000)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [order?.status, order?.id, idea?.id])
+
   const status = idea?.status
+  // Auftrag erst möglich, wenn die echte Idee fertig generiert ist.
+  const canOrder = Boolean(idea && status === 'generated')
+
+  const placeOrder = async () => {
+    if (!idea) return
+    setOrdering(true)
+    setOrderError(null)
+    try {
+      const created = await createOrder({
+        ideaId: idea.id,
+        description: idea.prompt,
+        conceptSheetUrl: idea.concept_sheet_url ?? idea.image_url,
+        previewImageUrl: idea.preview_image_url,
+        concept: idea.concept,
+      })
+      setOrder(created)
+    } catch (e) {
+      setOrderError(e instanceof Error ? e.message : 'Auftrag fehlgeschlagen.')
+    } finally {
+      setOrdering(false)
+    }
+  }
+
+  // Strukturierte KI-Spec (Quelle für Titel, Maße, Material, Preis …).
+  const spec = idea?.concept ?? null
+
+  // Anzeige-Werte: echte Spec wenn vorhanden, sonst Demo-Daten (d).
+  const displayTitle = spec?.titel ?? (idea ? 'Dein Design' : d.title)
+  const displayTagline = spec
+    ? [spec.kategorie, ...spec.farben].filter(Boolean).join(' · ')
+    : idea
+      ? idea.prompt
+      : d.tagline
+  const summary = spec?.kurzbeschreibung || (idea ? idea.prompt : d.summary)
+  const materials = spec
+    ? spec.materialien.map((m) => ({ name: m.bauteil, value: m.material }))
+    : d.materials
+  const dimensions = spec ? specDimensions(spec) : d.dimensions
+  const properties = spec
+    ? [...spec.besondere_details, ...(spec.konstruktion ? [spec.konstruktion] : [])]
+    : d.properties
+
+  // Themenfremde Eingabe (kein Möbelstück) → freundlicher Hinweis, kein Design.
+  if (status === 'rejected') {
+    return <RejectedView message={idea?.error ?? null} />
+  }
 
   return (
     <div className="relative">
@@ -110,11 +205,9 @@ export function Result() {
           <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
               <h1 className="text-balance text-4xl font-semibold leading-[1.05] text-ink-950 sm:text-5xl">
-                {idea ? 'Dein Design' : d.title}
+                {displayTitle}
               </h1>
-              <p className="mt-3 text-lg text-ink-500">
-                {idea ? idea.prompt : d.tagline}
-              </p>
+              <p className="mt-3 text-lg text-ink-500">{displayTagline}</p>
             </div>
             <div className="flex gap-2">
               <Button variant="secondary" size="sm">
@@ -169,52 +262,112 @@ export function Result() {
           <Reveal delay={0.08}>
             <Card className="sticky top-24 p-7">
               <div className="flex items-center gap-2 text-sm font-medium text-ink-500">
-                <Sparkles size={15} className="text-accent-600" /> Preisabschätzung
+                <Sparkles size={15} className="text-accent-600" /> Geschätzter Preis
               </div>
-              <div className="mt-3 flex items-end gap-2">
-                <span className="text-4xl font-semibold text-ink-950">
-                  {formatEUR(d.pricing.estimate)}
-                </span>
-              </div>
-              <p className="mt-1 text-sm text-ink-400">
-                Spanne {d.pricing.range}
-              </p>
-
-              <div className="mt-6 space-y-2.5 border-t border-ink-100 pt-5">
-                {d.pricing.breakdown.map((b) => (
-                  <div
-                    key={b.label}
-                    className="flex items-center justify-between text-sm"
-                  >
-                    <span className="text-ink-500">{b.label}</span>
-                    <span className="font-medium text-ink-900">
-                      {formatEUR(b.value)}
+              {spec ? (
+                <>
+                  <div className="mt-3 flex items-end gap-2">
+                    <span className="text-3xl font-semibold text-ink-950">
+                      ca. {formatEUR(spec.preis.min)} – {formatEUR(spec.preis.max)}
                     </span>
                   </div>
-                ))}
-              </div>
+                  <p className="mt-1 text-sm text-ink-400">{spec.preis.hinweis}</p>
 
-              <div className="mt-5 rounded-2xl bg-ink-50 p-4">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2 text-ink-600">
-                    <Factory size={15} /> Produktionskosten
-                  </span>
-                  <span className="font-semibold text-ink-950">
-                    {formatEUR(d.pricing.production)}
-                  </span>
-                </div>
-              </div>
+                  <div className="mt-6 space-y-2.5 border-t border-ink-100 pt-5 text-sm">
+                    <Factor label="Komplexität" value={spec.komplexitaet} />
+                    <Factor
+                      label="Bauteile"
+                      value={String(spec.anzahl_bauteile)}
+                    />
+                    <Factor
+                      label="Fertigungsaufwand"
+                      value={`${spec.fertigungsaufwand_stunden} h`}
+                    />
+                  </div>
 
-              <Button to="/manufacturers" size="lg" className="group mt-6 w-full">
-                Hersteller finden
-                <ArrowRight
-                  size={18}
-                  className="transition-transform duration-300 group-hover:translate-x-0.5"
-                />
-              </Button>
-              <p className="mt-3 text-center text-xs text-ink-400">
-                6 passende Partner in deiner Region
-              </p>
+                  <p className="mt-4 rounded-xl bg-ink-50 px-4 py-3 text-xs leading-relaxed text-ink-500">
+                    Dies ist eine automatische Schätzung zur Orientierung und
+                    ersetzt kein finales Angebot eines Herstellers.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="mt-3 flex items-end gap-2">
+                    <span className="text-4xl font-semibold text-ink-950">
+                      {formatEUR(d.pricing.estimate)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-ink-400">
+                    Spanne {d.pricing.range}
+                  </p>
+
+                  <div className="mt-6 space-y-2.5 border-t border-ink-100 pt-5">
+                    {d.pricing.breakdown.map((b) => (
+                      <div
+                        key={b.label}
+                        className="flex items-center justify-between text-sm"
+                      >
+                        <span className="text-ink-500">{b.label}</span>
+                        <span className="font-medium text-ink-900">
+                          {formatEUR(b.value)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 rounded-2xl bg-ink-50 p-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-2 text-ink-600">
+                        <Factory size={15} /> Produktionskosten
+                      </span>
+                      <span className="font-semibold text-ink-950">
+                        {formatEUR(d.pricing.production)}
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {order ? (
+                <OrderStatusCard order={order} />
+              ) : canOrder ? (
+                <>
+                  <Button
+                    size="lg"
+                    onClick={placeOrder}
+                    disabled={ordering}
+                    className="group mt-6 w-full"
+                  >
+                    <Hammer size={18} />
+                    {ordering ? 'Wird gesendet …' : 'Jetzt anfertigen lassen'}
+                    <ArrowRight
+                      size={18}
+                      className="transition-transform duration-300 group-hover:translate-x-0.5"
+                    />
+                  </Button>
+                  {orderError && (
+                    <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-center text-xs text-red-700">
+                      {orderError}
+                    </p>
+                  )}
+                  <p className="mt-3 text-center text-xs text-ink-400">
+                    Unverbindlich · wir finden den passenden Hersteller
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Button to="/manufacturers" size="lg" className="group mt-6 w-full">
+                    Hersteller finden
+                    <ArrowRight
+                      size={18}
+                      className="transition-transform duration-300 group-hover:translate-x-0.5"
+                    />
+                  </Button>
+                  <p className="mt-3 text-center text-xs text-ink-400">
+                    6 passende Partner in deiner Region
+                  </p>
+                </>
+              )}
             </Card>
           </Reveal>
         </div>
@@ -226,7 +379,7 @@ export function Result() {
               <Box size={18} className="text-accent-600" /> Designbeschreibung
             </h2>
             <p className="mt-4 max-w-3xl text-pretty text-[1.05rem] leading-relaxed text-ink-600">
-              {d.summary}
+              {summary}
             </p>
           </Card>
         </Reveal>
@@ -237,10 +390,10 @@ export function Result() {
           <Reveal>
             <Card className="h-full p-8">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
-                <Layers size={18} className="text-accent-600" /> Materialempfehlungen
+                <Layers size={18} className="text-accent-600" /> Materialien
               </h2>
               <dl className="mt-5 divide-y divide-ink-100">
-                {d.materials.map((m) => (
+                {materials.map((m) => (
                   <div
                     key={m.name}
                     className="flex items-center justify-between py-3"
@@ -262,7 +415,7 @@ export function Result() {
                 <Ruler size={18} className="text-accent-600" /> Maße & Eigenschaften
               </h2>
               <div className="mt-5 grid grid-cols-2 gap-3">
-                {d.dimensions.map((dim) => (
+                {dimensions.map((dim) => (
                   <div
                     key={dim.label}
                     className="rounded-xl border border-ink-100 bg-ink-50/50 p-4"
@@ -275,7 +428,7 @@ export function Result() {
                 ))}
               </div>
               <ul className="mt-5 space-y-2.5">
-                {d.properties.map((p) => (
+                {properties.map((p) => (
                   <li key={p} className="flex items-start gap-2.5 text-sm text-ink-600">
                     <Check
                       size={16}
@@ -289,7 +442,8 @@ export function Result() {
           </Reveal>
         </div>
 
-        {/* sustainability */}
+        {/* sustainability (nur Demo-Ansicht ohne echte Spec) */}
+        {!spec && (
         <Reveal>
           <Card className="mt-8 overflow-hidden p-0">
             <div className="grid gap-0 md:grid-cols-[auto_1fr]">
@@ -356,7 +510,97 @@ export function Result() {
             </div>
           </Card>
         </Reveal>
+        )}
       </Container>
+    </div>
+  )
+}
+
+/* ───────────── Hilfsfunktionen & Teilkomponenten ───────────── */
+
+/** Wandelt die Maße der Spec in {label, value}-Paare für die Anzeige. */
+function specDimensions(spec: NonNullable<Idea['concept']>): {
+  label: string
+  value: string
+}[] {
+  const dims: { label: string; value: string }[] = []
+  if (spec.masse.breite_cm) dims.push({ label: 'Breite', value: `${spec.masse.breite_cm} cm` })
+  if (spec.masse.hoehe_cm) dims.push({ label: 'Höhe', value: `${spec.masse.hoehe_cm} cm` })
+  if (spec.masse.tiefe_cm) dims.push({ label: 'Tiefe', value: `${spec.masse.tiefe_cm} cm` })
+  for (const w of spec.masse.weitere ?? []) dims.push({ label: w.label, value: w.wert })
+  return dims
+}
+
+/** Eine Preis-Einflussgröße (Label + Wert) in der Preis-Card. */
+function Factor({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-ink-500">{label}</span>
+      <span className="font-medium capitalize text-ink-900">{value}</span>
+    </div>
+  )
+}
+
+/** Freundliche Ablehnung für themenfremde Eingaben (kein Möbelstück). */
+function RejectedView({ message }: { message: string | null }) {
+  return (
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-cream to-white" />
+      <Container className="max-w-xl py-20">
+        <Reveal>
+          <Card className="p-8 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-50 text-amber-500">
+              <Sparkles size={26} />
+            </span>
+            <h1 className="mt-5 text-2xl font-semibold text-ink-950">
+              Das ist (noch) kein Möbelstück
+            </h1>
+            <p className="mt-3 text-pretty leading-relaxed text-ink-500">
+              {message ??
+                'IdeaForge ist aktuell ausschließlich auf die Entwicklung und Anfertigung von Möbelstücken spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'}
+            </p>
+            <Button to="/create" className="group mt-6">
+              Neue Möbelidee beschreiben
+              <ArrowRight
+                size={18}
+                className="transition-transform duration-300 group-hover:translate-x-0.5"
+              />
+            </Button>
+          </Card>
+        </Reveal>
+      </Container>
+    </div>
+  )
+}
+
+/* ───────────── Auftragsstatus (Kundensicht) ───────────── */
+
+function OrderStatusCard({ order }: { order: Order }) {
+  const { title, hint } = customerOrderStatus(order.status)
+  const open = order.status === 'submitted'
+  const rejected = order.status === 'rejected'
+  const tone = rejected
+    ? 'border-rose-100 bg-rose-50 text-rose-700'
+    : open
+      ? 'border-amber-100 bg-amber-50 text-amber-700'
+      : 'border-emerald-100 bg-emerald-50 text-emerald-700'
+  return (
+    <div className={cn('mt-6 rounded-2xl border p-5 text-center', tone)}>
+      {open ? (
+        <Sparkles size={22} className="mx-auto animate-spin" />
+      ) : rejected ? (
+        <ArrowRight size={22} className="mx-auto rotate-180" />
+      ) : (
+        <CheckCircle2 size={22} className="mx-auto" />
+      )}
+      <p className="mt-2 text-sm font-semibold">{title}</p>
+      <p className="mt-1 text-xs opacity-90">{hint}</p>
+      <Link
+        to="/dashboard"
+        className="mt-3 inline-block text-sm font-medium underline-offset-2 hover:underline"
+      >
+        Zu deinen Aufträgen
+      </Link>
     </div>
   )
 }

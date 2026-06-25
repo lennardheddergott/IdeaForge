@@ -22,6 +22,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { buildSketchPrompt, buildPreviewPrompt } from './prompt.ts'
+import { generateSpec, REJECTION_MESSAGE } from './spec.ts'
 
 const SKETCH_BUCKET = 'idea-sketches'
 const OPENAI_IMAGE_ENDPOINT = 'https://api.openai.com/v1/images/generations'
@@ -163,17 +164,42 @@ Deno.serve(async (req: Request) => {
       .update({ status: 'pending', error: null })
       .eq('id', ideaId)
 
-    // --- 1) Beide Prompts aus DERSELBEN Eingabe bauen -----------------------
-    const ideaForPrompt = {
-      prompt: idea.prompt,
-      style: idea.style,
-      materials: idea.materials,
-      category: idea.category,
-    }
-    const conceptPrompt = buildSketchPrompt(ideaForPrompt) // technisches Konzeptblatt
-    const previewPrompt = buildPreviewPrompt(ideaForPrompt) // fotorealistische Vorschau
+    // --- 1) Analyse: Möbel-Klassifikation + strukturierte Spec --------------
+    //   Dies ist die EINZIGE Quelle für Visualisierung, Konzeptblatt & Preis.
+    const textModel = Deno.env.get('OPENAI_TEXT_MODEL') ?? 'gpt-4o-mini'
+    const spec = await generateSpec({
+      apiKey: openaiKey,
+      model: textModel,
+      idea: {
+        prompt: idea.prompt,
+        style: idea.style,
+        materials: idea.materials,
+        category: idea.category,
+      },
+    })
 
-    // --- 2) Beide Bilder bei OpenAI erzeugen (parallel → konsistent & schnell)
+    // --- 1a) Themenfremde Eingabe → ablehnen, KEINE Bildgenerierung ---------
+    if (!spec.ist_moebel) {
+      const message = spec.ablehnung || REJECTION_MESSAGE
+      await admin
+        .from('ideas')
+        .update({
+          status: 'rejected',
+          error: message,
+          concept: null,
+          concept_sheet_url: null,
+          preview_image_url: null,
+          image_url: null,
+        })
+        .eq('id', ideaId)
+      return json({ status: 'rejected', message })
+    }
+
+    // --- 2) Beide Prompts aus DERSELBEN Spec bauen --------------------------
+    const conceptPrompt = buildSketchPrompt(spec) // technisches Konzeptblatt (DE)
+    const previewPrompt = buildPreviewPrompt(spec) // fotorealistische Vorschau
+
+    // --- 3) Beide Bilder bei OpenAI erzeugen (parallel → konsistent & schnell)
     const model = Deno.env.get('OPENAI_IMAGE_MODEL') ?? 'gpt-image-2'
     const size = Deno.env.get('OPENAI_IMAGE_SIZE') ?? '1024x1024'
     const quality = Deno.env.get('OPENAI_IMAGE_QUALITY') ?? 'medium'
@@ -183,16 +209,17 @@ Deno.serve(async (req: Request) => {
       generateImageBytes({ apiKey: openaiKey, model, size, quality, prompt: previewPrompt }),
     ])
 
-    // --- 3) Beide Bilder getrennt in den Storage-Bucket hochladen -----------
+    // --- 4) Beide Bilder getrennt in den Storage-Bucket hochladen -----------
     const [conceptUrl, previewUrl] = await Promise.all([
       uploadPng(admin, `${idea.user_id}/${ideaId}-concept.png`, conceptBytes),
       uploadPng(admin, `${idea.user_id}/${ideaId}-preview.png`, previewBytes),
     ])
 
-    // --- 4) Beide URLs in die DB zurückschreiben ----------------------------
+    // --- 5) Spec + URLs in die DB zurückschreiben ---------------------------
     const { error: updateError } = await admin
       .from('ideas')
       .update({
+        concept: spec, // strukturierte Spec (Quelle für Preis & Anzeige)
         concept_sheet_url: conceptUrl,
         preview_image_url: previewUrl,
         image_url: conceptUrl, // Abwärtskompatibilität (altes Einzelfeld)

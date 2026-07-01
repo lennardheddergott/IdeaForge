@@ -7,8 +7,16 @@ import { Card } from '@/components/ui/Card'
 import { Reveal } from '@/components/ui/Reveal'
 import { Toast } from '@/components/ui/Toast'
 import { OrderArtifacts } from '@/components/orders/OrderArtifacts'
+import { CalculationBreakdown } from '@/components/orders/CalculationBreakdown'
 import { cn, formatDate } from '@/lib/utils'
-import { getMyManufacturerProfile } from '@/lib/manufacturer'
+import {
+  getMyManufacturerProfile,
+  getMyPricing,
+  type ManufacturerPricingRow,
+} from '@/lib/manufacturer'
+import { computeCalculation } from '@/lib/pricing'
+import { buildVariants } from '@/lib/variants'
+import { listMyMaterials, type Material } from '@/lib/materials'
 import {
   claimOrder,
   getOrder,
@@ -21,6 +29,8 @@ export function ManufacturerOrderDetail() {
   const { id } = useParams()
   const [order, setOrder] = useState<Order | null>(null)
   const [profileId, setProfileId] = useState<string | null>(null)
+  const [pricing, setPricing] = useState<ManufacturerPricingRow | null>(null)
+  const [materials, setMaterials] = useState<Material[]>([])
   const [loading, setLoading] = useState(true)
   const [notFound, setNotFound] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -36,6 +46,18 @@ export function ManufacturerOrderDetail() {
     getMyManufacturerProfile()
       .then((p) => {
         if (!cancelled) setProfileId(p?.id ?? null)
+      })
+      .catch(() => {})
+
+    getMyPricing()
+      .then((p) => {
+        if (!cancelled) setPricing(p)
+      })
+      .catch(() => {})
+
+    listMyMaterials()
+      .then((m) => {
+        if (!cancelled) setMaterials(m)
       })
       .catch(() => {})
 
@@ -134,6 +156,20 @@ export function ManufacturerOrderDetail() {
 
   const meta = orderStatusMeta[order.status]
 
+  // Eigene Kalkulation für die gewählte Variante (Pricing-Engine).
+  const spec = order.concept
+  const variant = spec
+    ? (() => {
+        const vs = buildVariants(spec)
+        const tier = spec.selected_variant?.tier
+        return vs.find((v) => v.tier === tier) ?? vs.find((v) => v.recommended) ?? vs[1]
+      })()
+    : null
+  const calc =
+    spec && variant && pricing
+      ? computeCalculation(spec, variant, pricing, materials)
+      : null
+
   return (
     <div className="relative">
       <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b from-cream to-white" />
@@ -198,6 +234,65 @@ export function ManufacturerOrderDetail() {
               <p className="w-full rounded-xl bg-rose-50 px-4 py-2.5 text-sm text-rose-700">
                 {error}
               </p>
+            )}
+          </Card>
+        </Reveal>
+
+        {/* Deine Kalkulation – vollständig nachvollziehbar (nur für dich sichtbar) */}
+        <Reveal>
+          <Card className="mt-8 p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-ink-950">Deine Kalkulation</h2>
+                {variant && (
+                  <p className="mt-1 text-sm text-ink-400">
+                    Variante · {variant.title} ({variant.material})
+                  </p>
+                )}
+              </div>
+              {calc && (
+                <span className="rounded-full bg-ink-950 px-3 py-1.5 text-sm font-semibold text-white">
+                  {calc.price.toLocaleString('de-DE')} €
+                </span>
+              )}
+            </div>
+
+            {calc ? (
+              <>
+                <p className="mt-4 text-xs text-ink-400">
+                  Jeder Kostenblock ist aufklappbar und zeigt alle Zwischenschritte.
+                  Werte aus deinem Profil sind markiert und direkt bearbeitbar.
+                </p>
+                <div className="mt-4">
+                  <CalculationBreakdown calc={calc} />
+                </div>
+                <p className="mt-4 text-xs text-ink-400">
+                  Regelbasiert aus deinen Preisparametern berechnet. Für Kunden noch
+                  nicht sichtbar (kommt mit dem Matching).
+                </p>
+              </>
+            ) : (
+              <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {!pricing || !pricing.pricing_completed ? (
+                  <>
+                    Noch keine (vollständigen) Preisparameter hinterlegt.{' '}
+                    <Link to="/manufacturer/pricing" className="font-medium underline">
+                      Preise & Kalkulation öffnen
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  <>
+                    Für die gewählte Variante fehlt im Herstellerprofil ein Preis
+                    für „{variant?.material ?? 'dieses Material'}“. Bitte hinterlege
+                    dieses Material oder aktiviere es.{' '}
+                    <Link to="/manufacturer/materials" className="font-medium underline">
+                      Materialien verwalten
+                    </Link>
+                    .
+                  </>
+                )}
+              </div>
             )}
           </Card>
         </Reveal>

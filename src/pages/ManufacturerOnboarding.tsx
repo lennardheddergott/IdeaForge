@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Building2, Factory, MapPin, Sparkles } from 'lucide-react'
+import { ArrowRight, Building2, Clock, Factory, MapPin, Sparkles } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -34,6 +34,11 @@ const EMPTY: ManufacturerProfileInput = {
   description: '',
   monthly_capacity: null,
   avg_lead_time: '',
+  is_available: true,
+  auto_accept_enabled: false,
+  max_orders_per_week: null,
+  current_lead_time_weeks: null,
+  delivery_radius_km: null,
 }
 
 export function ManufacturerOnboarding() {
@@ -69,6 +74,11 @@ export function ManufacturerOnboarding() {
             description: p.description ?? '',
             monthly_capacity: p.monthly_capacity,
             avg_lead_time: p.avg_lead_time ?? '',
+            is_available: p.is_available ?? true,
+            auto_accept_enabled: p.auto_accept_enabled ?? false,
+            max_orders_per_week: p.max_orders_per_week,
+            current_lead_time_weeks: p.current_lead_time_weeks,
+            delivery_radius_km: p.delivery_radius_km,
           })
         }
       })
@@ -300,6 +310,70 @@ export function ManufacturerOnboarding() {
             </div>
           </Section>
 
+          {/* Kapazität & Verfügbarkeit (Grundlage fürs spätere Matching) */}
+          <Section icon={Clock} title="Kapazität & Verfügbarkeit">
+            <div className="flex flex-col gap-5">
+              <ToggleRow
+                title="Verfügbar für neue Aufträge"
+                hint="Ist dies aus, wirst du (später) nicht mehr für neue Aufträge vorgeschlagen."
+                checked={form.is_available}
+                onChange={(v) => set('is_available', v)}
+              />
+              <ToggleRow
+                title="Aufträge automatisch annehmen"
+                hint="Passende Aufträge können ohne manuelle Bestätigung zugewiesen werden."
+                checked={form.auto_accept_enabled}
+                onChange={(v) => set('auto_accept_enabled', v)}
+              />
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <TextField
+                  label="Max. Aufträge / Woche"
+                  type="number"
+                  placeholder="z. B. 3"
+                  value={
+                    form.max_orders_per_week != null
+                      ? String(form.max_orders_per_week)
+                      : ''
+                  }
+                  onChange={(v) =>
+                    set('max_orders_per_week', v === '' ? null : Number(v))
+                  }
+                />
+                <TextField
+                  label="Aktuelle Lieferzeit (Wochen)"
+                  type="number"
+                  placeholder="z. B. 5"
+                  value={
+                    form.current_lead_time_weeks != null
+                      ? String(form.current_lead_time_weeks)
+                      : ''
+                  }
+                  onChange={(v) =>
+                    set('current_lead_time_weeks', v === '' ? null : Number(v))
+                  }
+                />
+                <TextField
+                  label="Liefergebiet (km)"
+                  type="number"
+                  placeholder="z. B. 150"
+                  value={
+                    form.delivery_radius_km != null
+                      ? String(form.delivery_radius_km)
+                      : ''
+                  }
+                  onChange={(v) =>
+                    set('delivery_radius_km', v === '' ? null : Number(v))
+                  }
+                />
+              </div>
+              <p className="text-xs text-ink-400">
+                Diese Angaben werden später für das automatische Hersteller-Matching
+                genutzt. Noch keine Preisregeln – die folgen in einer späteren Phase.
+              </p>
+            </div>
+          </Section>
+
           {error && (
             <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
               {error}
@@ -353,6 +427,45 @@ function Section({
 
 function Label({ children }: { children: React.ReactNode }) {
   return <label className="text-xs font-medium text-ink-400">{children}</label>
+}
+
+/** Ein-/Ausschalter mit Titel und Hinweis. */
+function ToggleRow({
+  title,
+  hint,
+  checked,
+  onChange,
+}: {
+  title: string
+  hint: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium text-ink-950">{title}</p>
+        <p className="mt-0.5 text-xs text-ink-400">{hint}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={cn(
+          'relative mt-1 h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+          checked ? 'bg-accent-600' : 'bg-ink-200',
+        )}
+      >
+        <span
+          className={cn(
+            'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all',
+            checked ? 'right-0.5' : 'left-0.5',
+          )}
+        />
+      </button>
+    </div>
+  )
 }
 
 function TextField({

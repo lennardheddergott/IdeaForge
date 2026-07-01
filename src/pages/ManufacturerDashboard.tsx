@@ -5,9 +5,11 @@ import {
   Building2,
   CheckCircle2,
   Clock,
+  Coins,
   Factory,
   Globe,
   Inbox,
+  Layers,
   Mail,
   MapPin,
   Package,
@@ -27,6 +29,7 @@ import {
 } from '@/data/options'
 import {
   getMyManufacturerProfile,
+  updateManufacturerFields,
   type ManufacturerProfile,
 } from '@/lib/manufacturer'
 import {
@@ -158,6 +161,26 @@ export function ManufacturerDashboard() {
       'Auftrag wurde abgeschlossen.',
     )
 
+  // Schnell-Umschalter für Verfügbarkeit / Auto-Accept.
+  const toggleField = async (field: 'is_available' | 'auto_accept_enabled') => {
+    if (!profile) return
+    try {
+      const updated = await updateManufacturerFields({ [field]: !profile[field] })
+      setProfile(updated)
+      setToast(
+        field === 'is_available'
+          ? updated.is_available
+            ? 'Du bist wieder verfügbar für neue Aufträge.'
+            : 'Du bist auf „nicht verfügbar“ gestellt.'
+          : updated.auto_accept_enabled
+            ? 'Automatische Auftragsannahme aktiviert.'
+            : 'Automatische Auftragsannahme deaktiviert.',
+      )
+    } catch {
+      setToast('Aktualisierung fehlgeschlagen.')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center text-ink-400">
@@ -189,11 +212,35 @@ export function ManufacturerDashboard() {
                 {profile.company_name}
               </h1>
             </div>
-            <Button to="/manufacturer/onboarding" variant="secondary" size="sm">
-              <Pencil size={16} /> Unternehmensdaten bearbeiten
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button to="/manufacturer/materials" variant="secondary" size="sm">
+                <Layers size={16} /> Materialien
+              </Button>
+              <Button to="/manufacturer/pricing" variant="secondary" size="sm">
+                <Coins size={16} /> Preise & Kalkulation
+              </Button>
+              <Button to="/manufacturer/onboarding" variant="secondary" size="sm">
+                <Pencil size={16} /> Unternehmensdaten bearbeiten
+              </Button>
+            </div>
           </div>
         </Reveal>
+
+        {/* Hinweis bei unvollständigem Profil */}
+        {!profile.profile_completed && (
+          <Reveal>
+            <div className="mt-6 flex flex-col items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 sm:flex-row sm:items-center">
+              <p className="text-sm text-amber-800">
+                Dein Profil ist noch unvollständig. Ergänze Leistungen, Materialien,
+                Kapazität und Liefergebiet, damit du künftig für passende Aufträge
+                vorgeschlagen wirst.
+              </p>
+              <Button to="/manufacturer/onboarding" size="sm">
+                Profil vervollständigen
+              </Button>
+            </div>
+          </Reveal>
+        )}
 
         {/* stats */}
         <div className="mt-8 grid grid-cols-3 gap-4">
@@ -211,6 +258,55 @@ export function ManufacturerDashboard() {
         </div>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_1.6fr]">
+          {/* linke Spalte: Steuerung + Unternehmensprofil */}
+          <div className="flex flex-col gap-8">
+          {/* Verfügbarkeit & Kapazität (Schnellsteuerung) */}
+          <Reveal>
+            <Card className="p-7">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
+                <Clock size={18} className="text-accent-600" /> Verfügbarkeit & Kapazität
+              </h2>
+              <div className="mt-5 flex flex-col divide-y divide-ink-100">
+                <QuickToggle
+                  title="Verfügbar für neue Aufträge"
+                  checked={profile.is_available}
+                  onChange={() => toggleField('is_available')}
+                />
+                <QuickToggle
+                  title="Aufträge automatisch annehmen"
+                  checked={profile.auto_accept_enabled}
+                  onChange={() => toggleField('auto_accept_enabled')}
+                />
+              </div>
+              <dl className="mt-5 space-y-3 border-t border-ink-100 pt-5 text-sm">
+                <Row
+                  label="Kapazität / Woche"
+                  value={
+                    profile.max_orders_per_week != null
+                      ? `${profile.max_orders_per_week} Aufträge`
+                      : '–'
+                  }
+                />
+                <Row
+                  label="Aktuelle Lieferzeit"
+                  value={
+                    profile.current_lead_time_weeks != null
+                      ? `${profile.current_lead_time_weeks} Wochen`
+                      : '–'
+                  }
+                />
+                <Row
+                  label="Liefergebiet"
+                  value={
+                    profile.delivery_radius_km != null
+                      ? `${profile.delivery_radius_km} km`
+                      : '–'
+                  }
+                />
+              </dl>
+            </Card>
+          </Reveal>
+
           {/* Unternehmensprofil */}
           <Reveal>
             <Card className="p-7">
@@ -269,6 +365,7 @@ export function ManufacturerDashboard() {
               )}
             </Card>
           </Reveal>
+          </div>
 
           {/* Aufträge */}
           <div className="flex flex-col gap-8">
@@ -367,6 +464,40 @@ function Row({
         {Icon && <Icon size={13} />} {label}
       </dt>
       <dd className="text-right font-medium text-ink-900">{value || '–'}</dd>
+    </div>
+  )
+}
+
+/** Kompakter Ein-/Ausschalter für die Dashboard-Schnellsteuerung. */
+function QuickToggle({
+  title,
+  checked,
+  onChange,
+}: {
+  title: string
+  checked: boolean
+  onChange: () => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-3">
+      <p className="text-sm font-medium text-ink-800">{title}</p>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={onChange}
+        className={cn(
+          'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+          checked ? 'bg-accent-600' : 'bg-ink-200',
+        )}
+      >
+        <span
+          className={cn(
+            'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all',
+            checked ? 'right-0.5' : 'left-0.5',
+          )}
+        />
+      </button>
     </div>
   )
 }

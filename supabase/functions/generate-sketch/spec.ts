@@ -58,6 +58,14 @@ export interface ProductSpec {
   komplexitaet: 'niedrig' | 'mittel' | 'hoch'
   fertigungsaufwand_stunden: number
   preis: SpecPreis
+  // ── Phase 2: strukturierte Analyse für die Varianten-Ableitung ──
+  produktart: string
+  material_absicht: 'wood_look' | 'real_wood' | 'solid_wood' | 'metal' | 'glass' | 'mixed'
+  material_muss_echt: boolean
+  preis_absicht: 'budget' | 'flexible' | 'premium'
+  features: string[]
+  anzahl_tueren: number
+  anzahl_schubladen: number
 }
 
 // Deutsche Labels für die Auswahlfelder (IDs aus src/data/options.ts).
@@ -114,7 +122,19 @@ const SPEC_SYSTEM_PROMPT = [
   '',
   'SCHRITT 3 — Preisabschätzung: Schätze einen realistischen Endkundenpreis (in EUR) auf Basis von Möbelart, Maßen, Material, Komplexität, Konstruktion, Anzahl der Bauteile und geschätztem Fertigungsaufwand. Gib eine sinnvolle Spanne (min < max) an. Es ist ausdrücklich eine Schätzung.',
   '',
-  'WICHTIG: ALLE Textwerte im JSON müssen auf DEUTSCH sein (Titel, Kategorie, Materialbezeichnungen, Bauteile, Konstruktion, Details). Keine englischen Begriffe.',
+  'SCHRITT 4 — Struktur-Analyse für Varianten. Leite zusätzlich folgende Felder ab:',
+  '- "produktart": kurze Möbelart, z. B. "TV-Board", "Esstisch", "Schreibtisch", "Kleiderschrank".',
+  '- "material_absicht": Material-Absicht des Nutzers. Regeln:',
+  '    * "Eichenoptik", "Holzoptik", "in ... optik" → "wood_look" (günstige Holzoptik ist erlaubt).',
+  '    * "Eiche"/"Nussbaum" allein (ohne "massiv"/"Optik") → "real_wood" (unklar, Varianten möglich).',
+  '    * "massive Eiche", "Massivholz", "echtes Holz", "Vollholz" → "solid_wood".',
+  '    * überwiegend Metall → "metal"; Glas → "glass"; gemischt → "mixed".',
+  '- "material_muss_echt": true NUR, wenn der Nutzer ausdrücklich Massivholz/echtes Holz verlangt ("massiv", "Massivholz", "echtes Holz"). Bei "Eichenoptik"/"Holzoptik" IMMER false.',
+  '- "preis_absicht": "budget" bei "günstig", "nicht zu teuer", "preiswert"; "premium" bei "hochwertig", "Premium", "edel", "fürs Leben"; sonst "flexible".',
+  '- "features": Liste kurzer Merkmale, z. B. ["drei Türen", "Kabelmanagement"].',
+  '- "anzahl_tueren" und "anzahl_schubladen": ganze Zahlen (0, wenn keine).',
+  '',
+  'WICHTIG: ALLE Textwerte im JSON müssen auf DEUTSCH sein (Titel, Kategorie, Materialbezeichnungen, Bauteile, Konstruktion, Details). Keine englischen Begriffe. (Die Schlüssel material_absicht/preis_absicht nutzen die vorgegebenen englischen Codewörter.)',
   '',
   'Gib das JSON exakt in diesem Schema zurück:',
   '{',
@@ -131,7 +151,14 @@ const SPEC_SYSTEM_PROMPT = [
   '  "besondere_details": ["indirekte LED-Beleuchtung", "Push-to-open"],',
   '  "komplexitaet": "niedrig | mittel | hoch",',
   '  "fertigungsaufwand_stunden": 18,',
-  '  "preis": { "min": 850, "max": 1050, "waehrung": "EUR", "hinweis": "Schätzung, ±10 %" }',
+  '  "preis": { "min": 850, "max": 1050, "waehrung": "EUR", "hinweis": "Schätzung, ±10 %" },',
+  '  "produktart": "TV-Board",',
+  '  "material_absicht": "wood_look",',
+  '  "material_muss_echt": false,',
+  '  "preis_absicht": "flexible",',
+  '  "features": ["drei Türen", "Kabelmanagement"],',
+  '  "anzahl_tueren": 3,',
+  '  "anzahl_schubladen": 0',
   '}',
 ].join('\n')
 
@@ -205,6 +232,32 @@ function normalizeSpec(raw: unknown): ProductSpec {
       hinweis:
         typeof preis.hinweis === 'string' ? preis.hinweis : 'Schätzung, ±10 %',
     },
+    produktart:
+      typeof s.produktart === 'string' && s.produktart.trim()
+        ? s.produktart
+        : typeof s.kategorie === 'string'
+          ? s.kategorie
+          : 'Möbel',
+    material_absicht:
+      s.material_absicht === 'wood_look' ||
+      s.material_absicht === 'real_wood' ||
+      s.material_absicht === 'solid_wood' ||
+      s.material_absicht === 'metal' ||
+      s.material_absicht === 'glass' ||
+      s.material_absicht === 'mixed'
+        ? s.material_absicht
+        : 'real_wood',
+    material_muss_echt: s.material_muss_echt === true,
+    preis_absicht:
+      s.preis_absicht === 'budget' ||
+      s.preis_absicht === 'premium' ||
+      s.preis_absicht === 'flexible'
+        ? s.preis_absicht
+        : 'flexible',
+    features: asArray<string>(s.features),
+    anzahl_tueren: typeof s.anzahl_tueren === 'number' ? s.anzahl_tueren : 0,
+    anzahl_schubladen:
+      typeof s.anzahl_schubladen === 'number' ? s.anzahl_schubladen : 0,
   }
 }
 

@@ -31,3 +31,19 @@ export async function getMyProfile(): Promise<Profile | null> {
   if (error) throw new Error(`Profil konnte nicht geladen werden: ${error.message}`)
   return (data as Profile | null) ?? null
 }
+
+/** Aktualisiert das Profil des aktuell eingeloggten Nutzers (z. B. Name). */
+export async function updateMyProfile(fields: {
+  full_name?: string
+}): Promise<void> {
+  const { data: auth } = await supabase.auth.getUser()
+  const user = auth.user
+  if (!user) throw new Error('Nicht angemeldet.')
+
+  const { error } = await supabase
+    .from('profiles')
+    .update(fields)
+    .eq('id', user.id)
+
+  if (error) throw new Error(`Profil konnte nicht gespeichert werden: ${error.message}`)
+}

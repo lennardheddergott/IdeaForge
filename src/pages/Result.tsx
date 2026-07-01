@@ -1,59 +1,67 @@
 import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import {
+  ArrowLeft,
   ArrowRight,
-  Box,
   Check,
   CheckCircle2,
-  Factory,
-  Hammer,
-  Layers,
-  Leaf,
-  Ruler,
-  Share2,
+  ChevronLeft,
+  FileText,
+  ImagePlus,
+  Save,
   Sparkles,
-  Bookmark,
+  Wand2,
+  X,
 } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Reveal } from '@/components/ui/Reveal'
+import { Toast } from '@/components/ui/Toast'
 import { RenderingPlaceholder } from '@/components/ui/RenderingPlaceholder'
-import { designConcept as d } from '@/data/projects'
-import { getIdea, requestSketch, type Idea } from '@/lib/ideas'
 import {
-  createOrder,
-  customerOrderStatus,
-  getOrderByIdea,
-  type Order,
-} from '@/lib/orders'
-import { formatEUR } from '@/lib/utils'
-import { cn } from '@/lib/utils'
+  createVersion,
+  getIdea,
+  listVersions,
+  requestSketch,
+  type Idea,
+} from '@/lib/ideas'
+import { customerOrderStatus, getOrderByIdea, type Order } from '@/lib/orders'
+import { buildVariants, type Variant, type VariantTier } from '@/lib/variants'
+import { cn, formatEUR } from '@/lib/utils'
 
-const views = [
-  { variant: 'cabinet' as const, label: 'Frontansicht' },
-  { variant: 'table' as const, label: 'Perspektive' },
-  { variant: 'lamp' as const, label: 'Detail · LED' },
-  { variant: 'sofa' as const, label: 'Im Raum' },
-]
+const STEPS = ['Idee', 'Entwurf', 'Bearbeiten', 'Perfekt', 'Bestellung']
+const CONCEPT_AREAS = [
+  'Maße',
+  'Material',
+  'Beschläge',
+  'Türen',
+  'Schubladen',
+  'Konstruktion',
+] as const
 
 export function Result() {
   const { id } = useParams()
-  const [active, setActive] = useState(0)
+  const navigate = useNavigate()
   const [idea, setIdea] = useState<Idea | null>(null)
   const [loading, setLoading] = useState(Boolean(id))
   const [retrying, setRetrying] = useState(false)
-  // Auftrag aus dieser Idee ("Jetzt anfertigen lassen").
-  const [ordering, setOrdering] = useState(false)
   const [order, setOrder] = useState<Order | null>(null)
-  const [orderError, setOrderError] = useState<string | null>(null)
+  const [versions, setVersions] = useState<Idea[]>([])
+  const [selectedTier, setSelectedTier] = useState<VariantTier | null>(null)
+  const [changeText, setChangeText] = useState('')
+  const [sketches, setSketches] = useState<File[]>([])
+  const [applying, setApplying] = useState(false)
+  const [conceptOpen, setConceptOpen] = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
-  // Idee laden; solange die Skizze noch generiert wird ('pending'), nachpollen.
+  // Idee laden; solange sie generiert wird ('pending'), nachpollen.
   useEffect(() => {
     if (!id) return
     let cancelled = false
     let timer: ReturnType<typeof setTimeout> | undefined
-
     const load = async () => {
       try {
         const next = await getIdea(id)
@@ -66,6 +74,7 @@ export function Result() {
       }
     }
     setLoading(true)
+    setSelectedTier(null)
     load()
     return () => {
       cancelled = true
@@ -73,7 +82,6 @@ export function Result() {
     }
   }, [id])
 
-  // Erneuter Versuch nach einem Fehler.
   const retry = async () => {
     if (!id) return
     setRetrying(true)
@@ -82,11 +90,7 @@ export function Result() {
     } catch (e) {
       setIdea((prev) =>
         prev
-          ? {
-              ...prev,
-              status: 'failed',
-              error: e instanceof Error ? e.message : 'Fehlgeschlagen.',
-            }
+          ? { ...prev, status: 'failed', error: e instanceof Error ? e.message : 'Fehlgeschlagen.' }
           : prev,
       )
     } finally {
@@ -94,25 +98,31 @@ export function Result() {
     }
   }
 
-  // 1) Bestehenden Auftrag zur Idee einmalig laden, sobald sie fertig ist.
+  // Versionskette laden (bei Wechsel der angezeigten Version).
+  useEffect(() => {
+    if (!idea) return
+    let cancelled = false
+    listVersions(idea)
+      .then((v) => !cancelled && setVersions(v))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+    // Bewusst nur bei Wechsel der Version/Status neu laden (nicht bei jedem Poll-Objekt).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idea?.id, idea?.status])
+
+  // Bestehenden Auftrag laden + offenen Status nachpollen.
   useEffect(() => {
     if (!idea || idea.status !== 'generated') return
     let cancelled = false
     getOrderByIdea(idea.id)
-      .then((o) => {
-        if (!cancelled) setOrder(o)
-      })
-      .catch(() => {
-        /* Auftragsanzeige ist optional */
-      })
+      .then((o) => !cancelled && setOrder(o))
+      .catch(() => {})
     return () => {
       cancelled = true
     }
   }, [idea])
-
-  // 2) Solange der Auftrag offen ('submitted') ist, Status nachpollen –
-  //    so wird eine Annahme durch einen Hersteller live sichtbar. Greift auch
-  //    direkt nach dem Klick auf "Jetzt anfertigen lassen".
   useEffect(() => {
     const ideaId = idea?.id
     if (!ideaId || order?.status !== 'submitted') return
@@ -132,416 +142,731 @@ export function Result() {
   }, [order?.status, order?.id, idea?.id])
 
   const status = idea?.status
-  // Auftrag erst möglich, wenn die echte Idee fertig generiert ist.
-  const canOrder = Boolean(idea && status === 'generated')
+  const generated = status === 'generated'
+  const canOrder = Boolean(idea && generated)
+  const spec = idea?.concept ?? null
+  const variants = spec ? buildVariants(spec) : null
+  const activeTier: VariantTier =
+    selectedTier ?? variants?.find((v) => v.recommended)?.tier ?? 'standard'
 
-  const placeOrder = async () => {
+  const goToCheckout = () => {
+    if (idea) navigate(`/checkout/${idea.id}?variant=${activeTier}`)
+  }
+
+  // Änderung anwenden → neue Version erzeugen + neu generieren + hinwechseln.
+  const applyChange = async () => {
     if (!idea) return
-    setOrdering(true)
-    setOrderError(null)
+    const text = changeText.trim() || (sketches.length ? 'Neue Skizze als Referenz' : '')
+    if (!text) return
+    setApplying(true)
     try {
-      const created = await createOrder({
-        ideaId: idea.id,
-        description: idea.prompt,
-        conceptSheetUrl: idea.concept_sheet_url ?? idea.image_url,
-        previewImageUrl: idea.preview_image_url,
-        concept: idea.concept,
-      })
-      setOrder(created)
+      const v = await createVersion(idea, text, sketches)
+      await requestSketch(v.id)
+      setChangeText('')
+      setSketches([])
+      setApplying(false)
+      navigate(`/result/${v.id}`)
     } catch (e) {
-      setOrderError(e instanceof Error ? e.message : 'Auftrag fehlgeschlagen.')
-    } finally {
-      setOrdering(false)
+      setApplying(false)
+      setToast(e instanceof Error ? e.message : 'Änderung fehlgeschlagen.')
     }
   }
 
-  // Strukturierte KI-Spec (Quelle für Titel, Maße, Material, Preis …).
-  const spec = idea?.concept ?? null
+  const stepIndex = order ? 4 : generated ? 2 : 1
+  const latestNum = versions.length ? Math.max(...versions.map((v) => v.version_number)) : 1
+  const prevVersion = versions.find(
+    (v) => v.version_number === (idea?.version_number ?? 1) - 1,
+  )
 
-  // Anzeige-Werte: echte Spec wenn vorhanden, sonst Demo-Daten (d).
-  const displayTitle = spec?.titel ?? (idea ? 'Dein Design' : d.title)
-  const displayTagline = spec
-    ? [spec.kategorie, ...spec.farben].filter(Boolean).join(' · ')
-    : idea
-      ? idea.prompt
-      : d.tagline
-  const summary = spec?.kurzbeschreibung || (idea ? idea.prompt : d.summary)
-  const materials = spec
-    ? spec.materialien.map((m) => ({ name: m.bauteil, value: m.material }))
-    : d.materials
-  const dimensions = spec ? specDimensions(spec) : d.dimensions
-  const properties = spec
-    ? [...spec.besondere_details, ...(spec.konstruktion ? [spec.konstruktion] : [])]
-    : d.properties
+  if (status === 'rejected') return <RejectedView message={idea?.error ?? null} />
 
-  // Themenfremde Eingabe (kein Möbelstück) → freundlicher Hinweis, kein Design.
-  if (status === 'rejected') {
-    return <RejectedView message={idea?.error ?? null} />
+  if (!id) {
+    return (
+      <StudioShell stepIndex={0}>
+        <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
+          <RenderingPlaceholder variant="cabinet" className="w-full max-w-md shadow-lift" />
+          <p className="text-ink-500">Beschreibe deine Möbelidee, um deinen Entwurf zu starten.</p>
+          <Button to="/create">Neue Idee erstellen</Button>
+        </div>
+      </StudioShell>
+    )
   }
 
+  const conceptUrl = idea?.concept_sheet_url ?? idea?.image_url ?? null
+
   return (
-    <div className="relative">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-cream to-white" />
-
-      <Container className="py-14 sm:py-16">
-        <Reveal>
-          <div className="flex flex-wrap items-center gap-3">
-            {status === 'failed' ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-red-50 px-3.5 py-1.5 text-sm font-medium text-red-600">
-                Generierung fehlgeschlagen
-              </span>
-            ) : status === 'pending' || (loading && id) ? (
-              <span className="inline-flex items-center gap-2 rounded-full bg-amber-50 px-3.5 py-1.5 text-sm font-medium text-amber-600">
-                <Sparkles size={14} className="animate-spin" /> Bilder werden
-                generiert…
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3.5 py-1.5 text-sm font-medium text-emerald-600">
-                <Check size={14} /> Design generiert
-              </span>
-            )}
-            <span className="text-sm text-ink-400">Schritt 2 von 3</span>
-          </div>
-          <div className="mt-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h1 className="text-balance text-4xl font-semibold leading-[1.05] text-ink-950 sm:text-5xl">
-                {displayTitle}
-              </h1>
-              <p className="mt-3 text-lg text-ink-500">{displayTagline}</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm">
-                <Bookmark size={16} /> Speichern
-              </Button>
-              <Button variant="secondary" size="sm">
-                <Share2 size={16} /> Teilen
-              </Button>
-            </div>
-          </div>
-        </Reveal>
-
-        <div className="mt-10 grid gap-8 lg:grid-cols-[1.5fr_1fr]">
-          {/* gallery */}
-          <Reveal>
-            <div className="flex flex-col gap-4">
-              {id ? (
-                <SketchView
-                  idea={idea}
-                  loading={loading}
-                  retrying={retrying}
-                  onRetry={retry}
-                />
-              ) : (
-                <>
-                  <RenderingPlaceholder
-                    variant={views[active].variant}
-                    className="shadow-lift"
-                  />
-                  <div className="grid grid-cols-4 gap-3">
-                    {views.map((v, i) => (
-                      <button
-                        key={v.label}
-                        onClick={() => setActive(i)}
-                        className={cn(
-                          'overflow-hidden rounded-xl border-2 transition-all',
-                          active === i
-                            ? 'border-accent-600 ring-2 ring-accent-100'
-                            : 'border-transparent opacity-70 hover:opacity-100',
-                        )}
-                      >
-                        <RenderingPlaceholder variant={v.variant} />
-                      </button>
+    <StudioShell stepIndex={stepIndex}>
+      {!idea ? (
+        <div className="flex min-h-[40vh] items-center justify-center text-ink-400">Lädt …</div>
+      ) : (
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+          {/* LINKS — Möbel, Versionen, Änderungen */}
+          <section className="flex flex-col">
+            {/* Kopf: Name · Version · Konzeptblatt */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="truncate text-2xl font-semibold text-ink-950 sm:text-3xl">
+                  {spec?.titel ?? 'Dein Entwurf'}
+                </h1>
+                {versions.length > 0 && (
+                  <select
+                    value={idea.id}
+                    onChange={(e) => e.target.value !== idea.id && navigate(`/result/${e.target.value}`)}
+                    className="mt-2 h-9 rounded-full border border-ink-200 bg-white px-3.5 text-sm font-medium text-ink-700 outline-none transition-colors hover:border-ink-300 focus:border-accent-400"
+                  >
+                    {versions.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        Version {v.version_number}
+                        {v.version_number === latestNum ? ' · aktuell' : ''}
+                      </option>
                     ))}
-                  </div>
-                </>
-              )}
-            </div>
-          </Reveal>
-
-          {/* summary / pricing */}
-          <Reveal delay={0.08}>
-            <Card className="sticky top-24 p-7">
-              <div className="flex items-center gap-2 text-sm font-medium text-ink-500">
-                <Sparkles size={15} className="text-accent-600" /> Geschätzter Preis
+                  </select>
+                )}
               </div>
-              {spec ? (
-                <>
-                  <div className="mt-3 flex items-end gap-2">
-                    <span className="text-3xl font-semibold text-ink-950">
-                      ca. {formatEUR(spec.preis.min)} – {formatEUR(spec.preis.max)}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-ink-400">{spec.preis.hinweis}</p>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setConceptOpen(true)}
+                disabled={!conceptUrl}
+              >
+                <FileText size={16} /> Konzeptblatt ansehen
+              </Button>
+            </div>
 
-                  <div className="mt-6 space-y-2.5 border-t border-ink-100 pt-5 text-sm">
-                    <Factor label="Komplexität" value={spec.komplexitaet} />
-                    <Factor
-                      label="Bauteile"
-                      value={String(spec.anzahl_bauteile)}
-                    />
-                    <Factor
-                      label="Fertigungsaufwand"
-                      value={`${spec.fertigungsaufwand_stunden} h`}
-                    />
-                  </div>
+            {/* Hauptbild */}
+            <div className="mt-4">
+              <HeroStage idea={idea} loading={loading} retrying={retrying} onRetry={retry} />
+            </div>
 
-                  <p className="mt-4 rounded-xl bg-ink-50 px-4 py-3 text-xs leading-relaxed text-ink-500">
-                    Dies ist eine automatische Schätzung zur Orientierung und
-                    ersetzt kein finales Angebot eines Herstellers.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="mt-3 flex items-end gap-2">
-                    <span className="text-4xl font-semibold text-ink-950">
-                      {formatEUR(d.pricing.estimate)}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-sm text-ink-400">
-                    Spanne {d.pricing.range}
-                  </p>
+            {/* Unter dem Bild */}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={!prevVersion}
+                onClick={() => prevVersion && navigate(`/result/${prevVersion.id}`)}
+              >
+                <ChevronLeft size={16} /> Zur vorherigen Version
+              </Button>
+              <Button variant="secondary" size="sm" onClick={() => setToast('Entwurf gespeichert.')}>
+                <Save size={16} /> Entwurf speichern
+              </Button>
+            </div>
 
-                  <div className="mt-6 space-y-2.5 border-t border-ink-100 pt-5">
-                    {d.pricing.breakdown.map((b) => (
-                      <div
-                        key={b.label}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <span className="text-ink-500">{b.label}</span>
-                        <span className="font-medium text-ink-900">
-                          {formatEUR(b.value)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+            {/* Versionsübersicht */}
+            {versions.length > 0 && (
+              <VersionList
+                versions={versions}
+                currentId={idea.id}
+                latestNum={latestNum}
+                onSelect={(vid) => vid !== idea.id && navigate(`/result/${vid}`)}
+              />
+            )}
 
-                  <div className="mt-5 rounded-2xl bg-ink-50 p-4">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 text-ink-600">
-                        <Factory size={15} /> Produktionskosten
-                      </span>
-                      <span className="font-semibold text-ink-950">
-                        {formatEUR(d.pricing.production)}
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
+            {/* Änderungsbereich */}
+            <ChangeArea
+              disabled={!generated || applying}
+              changeText={changeText}
+              setChangeText={setChangeText}
+              sketches={sketches}
+              setSketches={setSketches}
+              onOpenConcept={() => setConceptOpen(true)}
+              onApply={applyChange}
+            />
 
+            <button
+              onClick={() => setShowDetails((v) => !v)}
+              className="mt-6 self-start text-sm font-medium text-ink-400 transition-colors hover:text-ink-700"
+            >
+              {showDetails ? 'Technische Daten ausblenden' : 'Technische Daten anzeigen'}
+            </button>
+            {showDetails && spec && <DesignDetails spec={spec} fallbackPrompt={idea.prompt} />}
+          </section>
+
+          {/* RECHTS — Varianten + Bestellung */}
+          <aside className="flex flex-col gap-3">
+            <p className="text-sm font-medium text-ink-500">Umsetzung</p>
+            {variants ? (
+              variants.map((v) => (
+                <VariantMini
+                  key={v.tier}
+                  variant={v}
+                  active={v.tier === activeTier}
+                  disabled={Boolean(order)}
+                  onSelect={() => setSelectedTier(v.tier)}
+                />
+              ))
+            ) : (
+              <p className="text-sm text-ink-400">Varianten entstehen …</p>
+            )}
+            {variants && (
+              <p className="text-[11px] leading-relaxed text-ink-400">
+                Preise sind Orientierungswerte, noch nicht aus Herstellerprofilen berechnet.
+              </p>
+            )}
+            <div className="mt-1">
               {order ? (
                 <OrderStatusCard order={order} />
               ) : canOrder ? (
-                <>
-                  <Button
-                    size="lg"
-                    onClick={placeOrder}
-                    disabled={ordering}
-                    className="group mt-6 w-full"
-                  >
-                    <Hammer size={18} />
-                    {ordering ? 'Wird gesendet …' : 'Jetzt anfertigen lassen'}
-                    <ArrowRight
-                      size={18}
-                      className="transition-transform duration-300 group-hover:translate-x-0.5"
-                    />
-                  </Button>
-                  {orderError && (
-                    <p className="mt-3 rounded-xl bg-red-50 px-4 py-2.5 text-center text-xs text-red-700">
-                      {orderError}
-                    </p>
-                  )}
-                  <p className="mt-3 text-center text-xs text-ink-400">
-                    Unverbindlich · wir finden den passenden Hersteller
-                  </p>
-                </>
-              ) : (
-                <>
-                  <Button to="/manufacturers" size="lg" className="group mt-6 w-full">
-                    Hersteller finden
-                    <ArrowRight
-                      size={18}
-                      className="transition-transform duration-300 group-hover:translate-x-0.5"
-                    />
-                  </Button>
-                  <p className="mt-3 text-center text-xs text-ink-400">
-                    6 passende Partner in deiner Region
-                  </p>
-                </>
-              )}
-            </Card>
-          </Reveal>
-        </div>
-
-        {/* description */}
-        <Reveal>
-          <Card className="mt-8 p-8">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
-              <Box size={18} className="text-accent-600" /> Designbeschreibung
-            </h2>
-            <p className="mt-4 max-w-3xl text-pretty text-[1.05rem] leading-relaxed text-ink-600">
-              {summary}
-            </p>
-          </Card>
-        </Reveal>
-
-        {/* detail grid */}
-        <div className="mt-8 grid gap-8 lg:grid-cols-2">
-          {/* materials */}
-          <Reveal>
-            <Card className="h-full p-8">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
-                <Layers size={18} className="text-accent-600" /> Materialien
-              </h2>
-              <dl className="mt-5 divide-y divide-ink-100">
-                {materials.map((m) => (
-                  <div
-                    key={m.name}
-                    className="flex items-center justify-between py-3"
-                  >
-                    <dt className="text-sm text-ink-500">{m.name}</dt>
-                    <dd className="text-sm font-medium text-ink-900">
-                      {m.value}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </Card>
-          </Reveal>
-
-          {/* dimensions + properties */}
-          <Reveal delay={0.06}>
-            <Card className="h-full p-8">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
-                <Ruler size={18} className="text-accent-600" /> Maße & Eigenschaften
-              </h2>
-              <div className="mt-5 grid grid-cols-2 gap-3">
-                {dimensions.map((dim) => (
-                  <div
-                    key={dim.label}
-                    className="rounded-xl border border-ink-100 bg-ink-50/50 p-4"
-                  >
-                    <p className="text-xs text-ink-400">{dim.label}</p>
-                    <p className="mt-1 text-xl font-semibold text-ink-950">
-                      {dim.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <ul className="mt-5 space-y-2.5">
-                {properties.map((p) => (
-                  <li key={p} className="flex items-start gap-2.5 text-sm text-ink-600">
-                    <Check
-                      size={16}
-                      className="mt-0.5 shrink-0 text-emerald-500"
-                    />
-                    {p}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          </Reveal>
-        </div>
-
-        {/* sustainability (nur Demo-Ansicht ohne echte Spec) */}
-        {!spec && (
-        <Reveal>
-          <Card className="mt-8 overflow-hidden p-0">
-            <div className="grid gap-0 md:grid-cols-[auto_1fr]">
-              <div className="flex flex-col items-center justify-center gap-3 bg-emerald-50 p-8 md:w-64">
-                <div className="relative flex h-28 w-28 items-center justify-center">
-                  <svg className="absolute inset-0 -rotate-90" viewBox="0 0 100 100">
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="44"
-                      fill="none"
-                      stroke="#d1fae5"
-                      strokeWidth="8"
-                    />
-                    <circle
-                      cx="50"
-                      cy="50"
-                      r="44"
-                      fill="none"
-                      stroke="#10b981"
-                      strokeWidth="8"
-                      strokeLinecap="round"
-                      strokeDasharray={2 * Math.PI * 44}
-                      strokeDashoffset={
-                        2 * Math.PI * 44 * (1 - d.sustainability.score / 100)
-                      }
-                    />
-                  </svg>
-                  <div className="text-center">
-                    <p className="text-2xl font-semibold text-emerald-700">
-                      {d.sustainability.score}
-                    </p>
-                    <p className="text-[10px] uppercase tracking-wide text-emerald-600">
-                      Score
-                    </p>
-                  </div>
-                </div>
-                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
-                  <Leaf size={15} /> {d.sustainability.label}
-                </span>
-              </div>
-              <div className="p-8">
-                <h2 className="text-lg font-semibold text-ink-950">
-                  Nachhaltigkeit
-                </h2>
-                <p className="mt-2 text-sm text-ink-500">
-                  Transparente Bewertung zu Material, Langlebigkeit und Herkunft.
-                </p>
-                <ul className="mt-5 grid gap-2.5 sm:grid-cols-2">
-                  {d.sustainability.points.map((p) => (
-                    <li
-                      key={p}
-                      className="flex items-start gap-2.5 text-sm text-ink-600"
-                    >
-                      <Check
-                        size={16}
-                        className="mt-0.5 shrink-0 text-emerald-500"
-                      />
-                      {p}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+                <Button size="lg" onClick={goToCheckout} className="group w-full">
+                  Zur Bestellung
+                  <ArrowRight
+                    size={18}
+                    className="transition-transform duration-300 group-hover:translate-x-0.5"
+                  />
+                </Button>
+              ) : null}
             </div>
-          </Card>
-        </Reveal>
-        )}
+          </aside>
+        </div>
+      )}
+
+      <ConceptModal
+        open={conceptOpen}
+        url={conceptUrl}
+        onClose={() => setConceptOpen(false)}
+        onAnnotate={(area, comment) => {
+          const line = area ? `[${area}] ${comment}` : comment
+          setChangeText((t) => (t ? `${t}\n${line}` : line))
+          setConceptOpen(false)
+        }}
+      />
+      <GeneratingOverlay show={applying} />
+      <Toast message={toast} onClose={() => setToast(null)} />
+    </StudioShell>
+  )
+}
+
+/* ───────────── Rahmen & Prozess-Navigation ───────────── */
+
+function StudioShell({ stepIndex, children }: { stepIndex: number; children: React.ReactNode }) {
+  return (
+    <div className="relative">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-gradient-to-b from-cream to-white" />
+      <Container className="py-10 sm:py-12">
+        <ProcessNav activeIndex={stepIndex} />
+        <div className="mt-10">{children}</div>
       </Container>
     </div>
   )
 }
 
-/* ───────────── Hilfsfunktionen & Teilkomponenten ───────────── */
+function ProcessNav({ activeIndex }: { activeIndex: number }) {
+  return (
+    <nav className="flex items-center justify-center">
+      {STEPS.map((s, i) => (
+        <div key={s} className="flex items-center">
+          <span
+            className={cn(
+              'flex items-center gap-1.5 text-sm',
+              i === activeIndex
+                ? 'font-medium text-ink-950'
+                : i < activeIndex
+                  ? 'text-ink-500'
+                  : 'text-ink-300',
+            )}
+          >
+            <span
+              className={cn(
+                'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-semibold',
+                i < activeIndex
+                  ? 'bg-ink-950 text-white'
+                  : i === activeIndex
+                    ? 'bg-accent-600 text-white'
+                    : 'bg-ink-100 text-ink-400',
+              )}
+            >
+              {i < activeIndex ? <Check size={11} /> : i + 1}
+            </span>
+            <span className="hidden sm:inline">{s}</span>
+          </span>
+          {i < STEPS.length - 1 && <span className="mx-2 h-px w-4 bg-ink-200 sm:mx-3 sm:w-8" />}
+        </div>
+      ))}
+    </nav>
+  )
+}
 
-/** Wandelt die Maße der Spec in {label, value}-Paare für die Anzeige. */
-function specDimensions(spec: NonNullable<Idea['concept']>): {
-  label: string
-  value: string
-}[] {
+/* ───────────── Hero (das Möbel) ───────────── */
+
+function HeroStage({
+  idea,
+  loading,
+  retrying,
+  onRetry,
+}: {
+  idea: Idea | null
+  loading: boolean
+  retrying: boolean
+  onRetry: () => void
+}) {
+  if (loading || retrying || !idea || idea.status === 'pending') {
+    return (
+      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-3xl border border-ink-100 bg-white shadow-lift">
+        <Sparkles size={30} className="animate-spin text-accent-600" />
+        <p className="text-sm text-ink-500">Dein Entwurf entsteht …</p>
+      </div>
+    )
+  }
+  if (idea.status === 'failed') {
+    return (
+      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-3xl border border-red-100 bg-red-50/60 p-6 text-center">
+        <p className="text-sm font-medium text-red-700">Der Entwurf konnte nicht erzeugt werden.</p>
+        {idea.error && <p className="max-w-md text-xs text-red-500">{idea.error}</p>}
+        <Button size="sm" onClick={onRetry}>
+          Erneut versuchen <ArrowRight size={16} />
+        </Button>
+      </div>
+    )
+  }
+  const src = idea.preview_image_url ?? idea.concept_sheet_url ?? idea.image_url
+  if (!src) return <RenderingPlaceholder variant="cabinet" className="shadow-lift" />
+  return (
+    <a href={src} target="_blank" rel="noopener noreferrer" className="group block">
+      <div className="overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-lift transition-shadow group-hover:shadow-float">
+        <img src={src} alt="Produktvorschau" className="aspect-[4/3] w-full object-cover" />
+      </div>
+    </a>
+  )
+}
+
+/* ───────────── Versionsübersicht ───────────── */
+
+function relativeTime(iso: string): string {
+  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
+  if (min < 1) return 'gerade eben'
+  if (min < 60) return `vor ${min} Min.`
+  const h = Math.round(min / 60)
+  if (h < 24) return `vor ${h} Std.`
+  return `vor ${Math.round(h / 24)} Tg.`
+}
+
+function VersionList({
+  versions,
+  currentId,
+  latestNum,
+  onSelect,
+}: {
+  versions: Idea[]
+  currentId: string
+  latestNum: number
+  onSelect: (id: string) => void
+}) {
+  return (
+    <div className="mt-6">
+      <p className="text-sm font-medium text-ink-500">Versionen</p>
+      <div className="mt-3 flex flex-col gap-2">
+        {versions.map((v) => {
+          const isCurrent = v.id === currentId
+          const isLatest = v.version_number === latestNum
+          return (
+            <button
+              key={v.id}
+              onClick={() => onSelect(v.id)}
+              className={cn(
+                'flex items-center justify-between gap-3 rounded-2xl border p-3.5 text-left transition-colors',
+                isCurrent
+                  ? 'border-accent-600 bg-accent-50/40 ring-1 ring-accent-600'
+                  : 'border-ink-100 hover:border-ink-200 hover:bg-ink-50/40',
+              )}
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink-950">Version {v.version_number}</p>
+                <p className="truncate text-xs text-ink-500">
+                  {v.change_note ?? 'Erste Erstellung'}
+                </p>
+              </div>
+              <span className="shrink-0 text-xs text-ink-400">
+                {isLatest ? 'Aktuell' : relativeTime(v.created_at)}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ───────────── Änderungsbereich ───────────── */
+
+function ChangeArea({
+  disabled,
+  changeText,
+  setChangeText,
+  sketches,
+  setSketches,
+  onOpenConcept,
+  onApply,
+}: {
+  disabled: boolean
+  changeText: string
+  setChangeText: (v: string) => void
+  sketches: File[]
+  setSketches: (f: File[]) => void
+  onOpenConcept: () => void
+  onApply: () => void
+}) {
+  const canApply = !disabled && (changeText.trim().length > 0 || sketches.length > 0)
+  return (
+    <div className="mt-8 rounded-3xl border border-ink-100 bg-white p-6 shadow-soft">
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
+        <Wand2 size={18} className="text-accent-600" /> Änderungen vornehmen
+      </h2>
+      <p className="mt-1 text-sm text-ink-500">
+        Beschreibe die gewünschte Anpassung – daraus entsteht eine neue Version.
+      </p>
+
+      <textarea
+        value={changeText}
+        onChange={(e) => setChangeText(e.target.value)}
+        rows={3}
+        disabled={disabled}
+        placeholder="z. B. Tischplatte etwas dicker · Nussbaum statt Eiche · 20 cm breiter · grifflose Front …"
+        className="mt-4 w-full resize-none rounded-2xl border border-ink-200 bg-white p-4 text-[0.95rem] leading-relaxed text-ink-900 outline-none transition-all placeholder:text-ink-300 focus:border-accent-400 focus:ring-4 focus:ring-accent-100 disabled:opacity-60"
+      />
+
+      {/* Zusatzoptionen */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label
+          className={cn(
+            'inline-flex cursor-pointer items-center gap-2 rounded-full border border-ink-200 bg-white px-3.5 py-2 text-sm text-ink-600 transition-colors hover:border-ink-300',
+            disabled && 'pointer-events-none opacity-60',
+          )}
+        >
+          <ImagePlus size={15} /> Neue Skizze hochladen
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files ?? [])
+              if (files.length) setSketches([...sketches, ...files].slice(0, 4))
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={onOpenConcept}
+          disabled={disabled}
+          className="inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white px-3.5 py-2 text-sm text-ink-600 transition-colors hover:border-ink-300 disabled:opacity-60"
+        >
+          <FileText size={15} /> Konzeptblatt bearbeiten
+        </button>
+      </div>
+
+      {sketches.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {sketches.map((f, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-2 rounded-full bg-ink-100 py-1 pl-3 pr-1.5 text-xs text-ink-700"
+            >
+              {f.name.length > 22 ? f.name.slice(0, 22) + '…' : f.name}
+              <button
+                onClick={() => setSketches(sketches.filter((_, idx) => idx !== i))}
+                className="flex h-5 w-5 items-center justify-center rounded-full bg-ink-200 text-ink-600 hover:bg-ink-300"
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+          <span className="self-center text-[11px] text-ink-400">
+            Skizze wird als Referenz gespeichert.
+          </span>
+        </div>
+      )}
+
+      <Button onClick={onApply} disabled={!canApply} className="group mt-5 w-full sm:w-auto">
+        <Wand2 size={17} /> Änderung anwenden
+        <ArrowRight
+          size={17}
+          className="transition-transform duration-300 group-hover:translate-x-0.5"
+        />
+      </Button>
+      <p className="mt-2 text-[11px] text-ink-400">
+        Es entsteht eine neue Version; die bisherige bleibt erhalten. Renderbild und
+        Konzeptblatt werden dabei gemeinsam neu erzeugt.
+      </p>
+    </div>
+  )
+}
+
+/* ───────────── Konzeptblatt-Modal (ansehen & annotieren) ───────────── */
+
+function ConceptModal({
+  open,
+  url,
+  onClose,
+  onAnnotate,
+}: {
+  open: boolean
+  url: string | null
+  onClose: () => void
+  onAnnotate: (area: string | null, comment: string) => void
+}) {
+  const [area, setArea] = useState<string | null>(null)
+  const [comment, setComment] = useState('')
+
+  const close = () => {
+    setArea(null)
+    setComment('')
+    onClose()
+  }
+  const submit = () => {
+    const c = comment.trim()
+    if (!c) return
+    const a = area
+    setArea(null)
+    setComment('')
+    onAnnotate(a, c)
+  }
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-ink-950/50 p-4"
+          onClick={close}
+        >
+          <motion.div
+            initial={{ scale: 0.97, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.97, opacity: 0 }}
+            onClick={(e) => e.stopPropagation()}
+            className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-white shadow-float md:flex-row"
+          >
+            {/* Konzeptblatt */}
+            <div className="flex flex-1 items-center justify-center bg-ink-50 p-3">
+              {url ? (
+                <a href={url} target="_blank" rel="noopener noreferrer" title="In voller Auflösung öffnen">
+                  <img src={url} alt="Konzeptblatt" className="max-h-[80vh] w-full object-contain" />
+                </a>
+              ) : (
+                <p className="p-10 text-sm text-ink-400">Kein Konzeptblatt vorhanden.</p>
+              )}
+            </div>
+
+            {/* Annotation */}
+            <div className="flex w-full flex-col border-t border-ink-100 p-6 md:w-80 md:border-l md:border-t-0">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-ink-950">Bereich markieren</h3>
+                <button onClick={close} className="text-ink-400 hover:text-ink-700">
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-ink-500">
+                Wähle einen Bereich und beschreibe die gewünschte Änderung.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {CONCEPT_AREAS.map((a) => (
+                  <button
+                    key={a}
+                    onClick={() => setArea(area === a ? null : a)}
+                    className={cn(
+                      'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+                      area === a
+                        ? 'border-accent-600 bg-accent-600 text-white'
+                        : 'border-ink-200 bg-white text-ink-600 hover:border-ink-300',
+                    )}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={comment}
+                onChange={(e) => setComment(e.target.value)}
+                rows={4}
+                placeholder='z. B. „Hier statt Eiche Nussbaum" oder „Diese Tür entfernen"'
+                className="mt-4 w-full resize-none rounded-2xl border border-ink-200 bg-white p-3 text-sm text-ink-900 outline-none focus:border-accent-400 focus:ring-4 focus:ring-accent-100"
+              />
+              <Button onClick={submit} disabled={!comment.trim()} className="mt-4 w-full">
+                Als Änderung übernehmen
+              </Button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
+/* ───────────── Overlay während der Neugenerierung ───────────── */
+
+function GeneratingOverlay({ show }: { show: boolean }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="glass fixed inset-0 z-[60] flex items-center justify-center p-6"
+        >
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="flex w-full max-w-sm flex-col items-center rounded-3xl border border-ink-100 bg-white p-9 text-center shadow-lift"
+          >
+            <motion.span
+              animate={{ rotate: 360 }}
+              transition={{ duration: 2.4, repeat: Infinity, ease: 'linear' }}
+              className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-500 to-violet-accent text-white shadow-float"
+            >
+              <Wand2 size={26} />
+            </motion.span>
+            <h3 className="mt-6 text-xl font-semibold text-ink-950">Neue Version entsteht</h3>
+            <p className="mt-2 text-sm text-ink-500">
+              Renderbild, Konzeptblatt, Maße, Preis und Varianten werden gemeinsam neu erzeugt …
+            </p>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
+}
+
+/* ───────────── Varianten (kompakt) ───────────── */
+
+function VariantMini({
+  variant: v,
+  active,
+  disabled,
+  onSelect,
+}: {
+  variant: Variant
+  active: boolean
+  disabled: boolean
+  onSelect: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      disabled={disabled}
+      className={cn(
+        'w-full rounded-2xl border p-4 text-left transition-all',
+        active
+          ? 'border-accent-600 bg-accent-50/40 ring-1 ring-accent-600'
+          : 'border-ink-100 hover:border-ink-200 hover:bg-ink-50/40',
+        disabled && !active && 'opacity-70',
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 font-semibold text-ink-950">
+          <span
+            className={cn(
+              'flex h-4 w-4 items-center justify-center rounded-full border',
+              active ? 'border-accent-600 bg-accent-600 text-white' : 'border-ink-300',
+            )}
+          >
+            {active && <Check size={11} />}
+          </span>
+          {v.title}
+        </span>
+        {v.recommended && (
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-accent-600">
+            Empfohlen
+          </span>
+        )}
+      </div>
+      <ul className="mt-2.5 space-y-1 pl-6 text-xs text-ink-500">
+        <li>{v.material}</li>
+        <li>{v.surface}</li>
+        <li>{v.hardware}</li>
+      </ul>
+      <div className="mt-3 flex items-center justify-between pl-6">
+        <span className="text-base font-semibold text-ink-950">{formatEUR(v.priceFrom)}</span>
+        <span className="text-xs text-ink-400">
+          {v.leadTimeWeeks[0]}–{v.leadTimeWeeks[1]} Wochen
+        </span>
+      </div>
+    </button>
+  )
+}
+
+/* ───────────── Details (zurückhaltend) ───────────── */
+
+function DesignDetails({
+  spec,
+  fallbackPrompt,
+}: {
+  spec: NonNullable<Idea['concept']>
+  fallbackPrompt: string
+}) {
   const dims: { label: string; value: string }[] = []
   if (spec.masse.breite_cm) dims.push({ label: 'Breite', value: `${spec.masse.breite_cm} cm` })
   if (spec.masse.hoehe_cm) dims.push({ label: 'Höhe', value: `${spec.masse.hoehe_cm} cm` })
   if (spec.masse.tiefe_cm) dims.push({ label: 'Tiefe', value: `${spec.masse.tiefe_cm} cm` })
   for (const w of spec.masse.weitere ?? []) dims.push({ label: w.label, value: w.wert })
-  return dims
-}
 
-/** Eine Preis-Einflussgröße (Label + Wert) in der Preis-Card. */
-function Factor({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-ink-500">{label}</span>
-      <span className="font-medium capitalize text-ink-900">{value}</span>
+    <div className="mt-4 space-y-6 border-t border-ink-100 pt-6">
+      <p className="max-w-2xl text-pretty leading-relaxed text-ink-600">
+        {spec.kurzbeschreibung || fallbackPrompt}
+      </p>
+      {dims.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {dims.map((d) => (
+            <span key={d.label} className="rounded-full bg-ink-50 px-3 py-1.5 text-sm text-ink-600">
+              <span className="text-ink-400">{d.label}:</span>{' '}
+              <span className="font-medium text-ink-900">{d.value}</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {spec.materialien.length > 0 && (
+        <dl className="max-w-md divide-y divide-ink-100">
+          {spec.materialien.map((m) => (
+            <div key={m.bauteil} className="flex items-center justify-between py-2 text-sm">
+              <dt className="text-ink-500">{m.bauteil}</dt>
+              <dd className="font-medium text-ink-900">{m.material}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
     </div>
   )
 }
 
-/** Freundliche Ablehnung für themenfremde Eingaben (kein Möbelstück). */
+/* ───────────── Auftragsstatus (Kundensicht) ───────────── */
+
+function OrderStatusCard({ order }: { order: Order }) {
+  const { title, hint } = customerOrderStatus(order.status)
+  const open = order.status === 'submitted'
+  const rejected = order.status === 'rejected'
+  const tone = rejected
+    ? 'border-rose-100 bg-rose-50 text-rose-700'
+    : open
+      ? 'border-amber-100 bg-amber-50 text-amber-700'
+      : 'border-emerald-100 bg-emerald-50 text-emerald-700'
+  return (
+    <div className={cn('rounded-2xl border p-5 text-center', tone)}>
+      {open ? (
+        <Sparkles size={22} className="mx-auto animate-spin" />
+      ) : rejected ? (
+        <ArrowLeft size={22} className="mx-auto" />
+      ) : (
+        <CheckCircle2 size={22} className="mx-auto" />
+      )}
+      <p className="mt-2 text-sm font-semibold">{title}</p>
+      <p className="mt-1 text-xs opacity-90">{hint}</p>
+      <Link
+        to="/dashboard"
+        className="mt-3 inline-block text-sm font-medium underline-offset-2 hover:underline"
+      >
+        Zu deinen Aufträgen
+      </Link>
+    </div>
+  )
+}
+
+/* ───────────── Ablehnung (kein Möbelstück) ───────────── */
+
 function RejectedView({ message }: { message: string | null }) {
   return (
     <div className="relative">
@@ -570,140 +895,5 @@ function RejectedView({ message }: { message: string | null }) {
         </Reveal>
       </Container>
     </div>
-  )
-}
-
-/* ───────────── Auftragsstatus (Kundensicht) ───────────── */
-
-function OrderStatusCard({ order }: { order: Order }) {
-  const { title, hint } = customerOrderStatus(order.status)
-  const open = order.status === 'submitted'
-  const rejected = order.status === 'rejected'
-  const tone = rejected
-    ? 'border-rose-100 bg-rose-50 text-rose-700'
-    : open
-      ? 'border-amber-100 bg-amber-50 text-amber-700'
-      : 'border-emerald-100 bg-emerald-50 text-emerald-700'
-  return (
-    <div className={cn('mt-6 rounded-2xl border p-5 text-center', tone)}>
-      {open ? (
-        <Sparkles size={22} className="mx-auto animate-spin" />
-      ) : rejected ? (
-        <ArrowRight size={22} className="mx-auto rotate-180" />
-      ) : (
-        <CheckCircle2 size={22} className="mx-auto" />
-      )}
-      <p className="mt-2 text-sm font-semibold">{title}</p>
-      <p className="mt-1 text-xs opacity-90">{hint}</p>
-      <Link
-        to="/dashboard"
-        className="mt-3 inline-block text-sm font-medium underline-offset-2 hover:underline"
-      >
-        Zu deinen Aufträgen
-      </Link>
-    </div>
-  )
-}
-
-/* ───────────── generierte Konzeptskizze ───────────── */
-
-function SketchView({
-  idea,
-  loading,
-  retrying,
-  onRetry,
-}: {
-  idea: Idea | null
-  loading: boolean
-  retrying: boolean
-  onRetry: () => void
-}) {
-  // Lädt noch / wird gerade generiert.
-  if (loading || retrying || !idea || idea.status === 'pending') {
-    return (
-      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-2xl border border-ink-100 bg-white shadow-lift">
-        <Sparkles size={28} className="animate-spin text-accent-600" />
-        <p className="text-sm text-ink-500">
-          Deine Produktvorschau &amp; dein Konzeptblatt werden erzeugt…
-        </p>
-      </div>
-    )
-  }
-
-  // Fehlgeschlagen → Ursache + erneuter Versuch.
-  if (idea.status === 'failed') {
-    return (
-      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-2xl border border-red-100 bg-red-50/60 p-6 text-center">
-        <p className="text-sm font-medium text-red-700">
-          Die Bilder konnten nicht generiert werden.
-        </p>
-        {idea.error && (
-          <p className="max-w-md text-xs text-red-500">{idea.error}</p>
-        )}
-        <Button size="sm" onClick={onRetry}>
-          Erneut versuchen
-          <ArrowRight size={16} />
-        </Button>
-      </div>
-    )
-  }
-
-  // Erfolgreich → zuerst die fotorealistische Vorschau, darunter das Konzeptblatt.
-  // (concept_sheet_url fällt für ältere Ideen auf image_url zurück.)
-  const previewUrl = idea.preview_image_url
-  const conceptUrl = idea.concept_sheet_url ?? idea.image_url
-  if (previewUrl || conceptUrl) {
-    return (
-      <div className="flex flex-col gap-6">
-        {previewUrl && (
-          <SheetFigure
-            src={previewUrl}
-            alt="Fotorealistische Produktvorschau"
-            caption="Fotorealistische Produktvorschau · zum Vergrößern anklicken"
-          />
-        )}
-        {conceptUrl && (
-          <SheetFigure
-            src={conceptUrl}
-            alt="Technisches Konzeptblatt"
-            caption="Technisches Konzeptblatt · zum Vergrößern anklicken"
-          />
-        )}
-      </div>
-    )
-  }
-
-  // Fallback (sollte praktisch nicht eintreten).
-  return <RenderingPlaceholder variant="cabinet" className="shadow-lift" />
-}
-
-/** Ein generiertes Bild: klickbar in voller Auflösung, mit Bildunterschrift. */
-function SheetFigure({
-  src,
-  alt,
-  caption,
-}: {
-  src: string
-  alt: string
-  caption: string
-}) {
-  return (
-    <figure className="flex flex-col gap-2">
-      <a
-        href={src}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group block"
-      >
-        <img
-          src={src}
-          alt={alt}
-          className="aspect-[4/3] w-full rounded-2xl border border-ink-100 bg-white object-contain p-2 shadow-lift transition-shadow group-hover:shadow-float"
-        />
-      </a>
-      <figcaption className="text-center text-xs text-ink-400">
-        {caption}
-      </figcaption>
-    </figure>
   )
 }

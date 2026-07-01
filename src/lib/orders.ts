@@ -22,6 +22,8 @@ export interface Order {
   /** Snapshot der KI-Spezifikation (Preis, Material, Maße …) zum Bestellzeitpunkt. */
   concept: ProductSpec | null
   status: OrderStatus
+  /** Platzhalter für späteren Checkout (MVP: 'unpaid'). */
+  payment_status: 'unpaid' | 'pending' | 'paid'
   created_at: string
   updated_at: string
 }
@@ -75,6 +77,7 @@ export async function createOrder(input: OrderInput): Promise<Order> {
       preview_image_url: input.previewImageUrl,
       concept: input.concept,
       status: 'submitted',
+      payment_status: 'unpaid', // Platzhalter – Checkout kommt später.
     })
     .select()
     .single()

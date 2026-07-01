@@ -40,6 +40,34 @@ export interface ProductSpec {
   komplexitaet: 'niedrig' | 'mittel' | 'hoch'
   fertigungsaufwand_stunden: number
   preis: { min: number; max: number; waehrung: string; hinweis: string }
+
+  // ── Phase 2: strukturierte Analyse für die Varianten-Ableitung ──
+  // Alle optional (Abwärtskompatibilität mit vor Phase 2 erzeugten Ideen).
+  /** Möbelart, z. B. "TV-Board", "Esstisch", "Schreibtisch". */
+  produktart?: string
+  /**
+   * Material-Absicht des Nutzers:
+   *  wood_look  = Holz-/Eichenoptik erlaubt (z. B. "Eichenoptik")
+   *  real_wood  = echtes Holz gewünscht, aber unklar ("Eiche")
+   *  solid_wood = ausdrücklich Massivholz ("massive Eiche", "Massivholz")
+   */
+  material_absicht?: 'wood_look' | 'real_wood' | 'solid_wood' | 'metal' | 'glass' | 'mixed'
+  /** true nur, wenn der Nutzer ausdrücklich Massivholz/echtes Holz verlangt. */
+  material_muss_echt?: boolean
+  /** Primäre Holzart (z. B. 'eiche', 'nussbaum') – optional; sonst aus Text erkannt. */
+  holzart?: string
+  /** budget = "günstig/nicht zu teuer", premium = "hochwertig/edel". */
+  preis_absicht?: 'budget' | 'flexible' | 'premium'
+  features?: string[]
+  anzahl_tueren?: number
+  anzahl_schubladen?: number
+  /** Vom Kunden gewählte Umsetzungsvariante (im Auftrags-Snapshot). */
+  selected_variant?: {
+    tier: string
+    title: string
+    material: string
+    price_from: number
+  } | null
 }
 
 /** Eine in der DB gespeicherte Idee. */
@@ -63,6 +91,12 @@ export interface Idea {
   error: string | null
   /** Strukturierte KI-Spezifikation (Quelle für Preis & Anzeige); null bis fertig. */
   concept: ProductSpec | null
+  /** Versionierung: Wurzel-Idee der Versionskette (null = selbst Version 1). */
+  root_idea_id: string | null
+  /** Fortlaufende Versionsnummer innerhalb der Kette (1 = erste Erstellung). */
+  version_number: number
+  /** Beschreibung der Änderung, die zu dieser Version geführt hat (null bei V1). */
+  change_note: string | null
   created_at: string
 }
 
@@ -166,4 +200,84 @@ export async function listIdeas(): Promise<Idea[]> {
 
   if (error) throw new Error(`Ideen konnten nicht geladen werden: ${error.message}`)
   return (data ?? []) as Idea[]
+}
+
+/** Wurzel-Idee einer Versionskette. */
+function rootIdOf(idea: Idea): string {
+  return idea.root_idea_id ?? idea.id
+}
+
+/**
+ * Lädt alle Versionen einer Idee (Version 1 … n) in aufsteigender Reihenfolge.
+ * Jede Version ist eine eigenständige, vollständig generierte Idee (mit eigenem
+ * Renderbild, Konzeptblatt und Spec) – dadurch bleiben Bild & Konzeptblatt je
+ * Version immer synchron.
+ */
+export async function listVersions(idea: Idea): Promise<Idea[]> {
+  const rootId = rootIdOf(idea)
+  const { data, error } = await supabase
+    .from('ideas')
+    .select()
+    .or(`id.eq.${rootId},root_idea_id.eq.${rootId}`)
+    .order('version_number', { ascending: true })
+
+  if (error) throw new Error(`Versionen konnten nicht geladen werden: ${error.message}`)
+  return (data ?? []) as Idea[]
+}
+
+/**
+ * Erstellt aus einer bestehenden Version eine NEUE Version (Version +1) mit einem
+ * Änderungswunsch. Die bisherige Version bleibt unverändert erhalten. Die neue
+ * Idee wird mit status 'pending' angelegt; der Aufrufer muss anschließend
+ * requestSketch(neueId) aufrufen, damit Renderbild, Konzeptblatt und Spec
+ * gemeinsam (synchron) neu erzeugt werden.
+ */
+export async function createVersion(
+  from: Idea,
+  changeText: string,
+  sketchFiles: File[] = [],
+): Promise<Idea> {
+  const { data: auth } = await supabase.auth.getUser()
+  const user = auth.user
+  if (!user) throw new Error('Nicht angemeldet.')
+
+  const rootId = rootIdOf(from)
+
+  // Höchste bisherige Versionsnummer der Kette ermitteln.
+  const { data: siblings, error: sibErr } = await supabase
+    .from('ideas')
+    .select('version_number')
+    .or(`id.eq.${rootId},root_idea_id.eq.${rootId}`)
+  if (sibErr) throw new Error(`Versionen konnten nicht geladen werden: ${sibErr.message}`)
+  const maxNum = Math.max(
+    1,
+    ...(siblings ?? []).map((s) => (s as { version_number?: number }).version_number ?? 1),
+  )
+
+  const sketchPaths =
+    sketchFiles.length > 0 ? await uploadImages(user.id, sketchFiles) : []
+
+  // Änderungswunsch an die bisherige Beschreibung anhängen (kumulativer Entwurf).
+  const newPrompt = `${from.prompt}\n\nÄnderung: ${changeText}`
+
+  const { data, error } = await supabase
+    .from('ideas')
+    .insert({
+      user_id: user.id,
+      prompt: newPrompt,
+      style: from.style,
+      materials: from.materials,
+      category: from.category,
+      budget: from.budget,
+      image_paths: sketchPaths,
+      status: 'pending',
+      root_idea_id: rootId,
+      version_number: maxNum + 1,
+      change_note: changeText,
+    })
+    .select()
+    .single()
+
+  if (error) throw new Error(`Neue Version konnte nicht erstellt werden: ${error.message}`)
+  return data as Idea
 }

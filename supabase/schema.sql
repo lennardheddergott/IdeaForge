@@ -126,6 +126,10 @@ create table if not exists public.ideas (
   error       text,
   -- Optionales strukturiertes KI-Ergebnis (entspricht designConcept in projects.ts):
   concept     jsonb,
+  -- Versionierung des Designprozesses (Migration 0009):
+  root_idea_id   uuid references public.ideas (id) on delete set null, -- Wurzel der Kette
+  version_number int not null default 1,                               -- 1 = erste Erstellung
+  change_note    text,                                                 -- Änderung dieser Version
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
@@ -304,10 +308,17 @@ create table if not exists public.manufacturer_profiles (
   company_type      text,                                -- Art (Tischlerei, Metallbau, …)
   specializations   text[] not null default '{}',        -- Tische, Schränke, Regale, …
   materials         text[] not null default '{}',        -- Massivholz, MDF, Metall, Glas, …
-  service_area      text,                                -- Liefergebiet / Region
+  service_area      text,                                -- Liefergebiet / Region (Freitext)
   description       text,                                -- Beschreibung des Unternehmens
   monthly_capacity  int,                                 -- Kapazität pro Monat (optional)
-  avg_lead_time     text,                                -- durchschn. Bearbeitungszeit (optional)
+  avg_lead_time     text,                                -- durchschn. Bearbeitungszeit (Freitext)
+  -- Steuerbare Felder für Kapazität/Verfügbarkeit (Grundlage fürs Matching):
+  is_available            boolean not null default true,  -- verfügbar für neue Aufträge
+  auto_accept_enabled     boolean not null default false, -- Aufträge automatisch annehmen
+  max_orders_per_week     int,                            -- Kapazität pro Woche
+  current_lead_time_weeks int,                            -- aktuelle Lieferzeit (Wochen)
+  delivery_radius_km      int,                            -- Liefergebiet in km
+  profile_completed       boolean not null default false, -- Profil ausreichend gefüllt
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
@@ -364,6 +375,9 @@ create table if not exists public.orders (
   status             text not null default 'submitted'
                      check (status in ('submitted', 'assigned', 'accepted',
                                        'rejected', 'in_production', 'completed')),
+  -- Platzhalter für späteren Checkout (MVP: nur 'unpaid', keine echte Zahlung).
+  payment_status     text not null default 'unpaid'
+                     check (payment_status in ('unpaid', 'pending', 'paid')),
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now()
 );
@@ -438,6 +452,101 @@ create policy "orders: manufacturer update"
 drop trigger if exists trg_orders_updated_at on public.orders;
 create trigger trg_orders_updated_at
   before update on public.orders
+  for each row execute function public.set_updated_at();
+
+
+-- ----------------------------------------------------------------------------
+-- 6d) manufacturer_pricing  —  regelbasierte Preisparameter je Hersteller
+-- ----------------------------------------------------------------------------
+-- Grundlage der Pricing-Engine (src/lib/pricing.ts). PRIVAT: nur der Eigentümer
+-- darf lesen/schreiben. Kunden sehen später nur berechnete Ergebnisse.
+create table if not exists public.manufacturer_pricing (
+  id                             uuid primary key default gen_random_uuid(),
+  user_id                        uuid not null unique references auth.users (id) on delete cascade,
+  hourly_rate                    numeric(10,2) not null default 0,
+  margin_percent                 numeric(6,2)  not null default 0,
+  minimum_order_value            numeric(10,2) not null default 0,
+  delivery_fee                   numeric(10,2) not null default 0,
+  assembly_fee                   numeric(10,2) not null default 0,
+  surface_treatment_price_per_m2 numeric(10,2) not null default 0,
+  door_price                     numeric(10,2) not null default 0,
+  drawer_price                   numeric(10,2) not null default 0,
+  standard_hardware_price        numeric(10,2) not null default 0,
+  premium_hardware_price         numeric(10,2) not null default 0,
+  material_prices                jsonb not null default '{}',
+  pricing_completed              boolean not null default false,
+  created_at                     timestamptz not null default now(),
+  updated_at                     timestamptz not null default now()
+);
+
+alter table public.manufacturer_pricing enable row level security;
+
+drop policy if exists "manufacturer_pricing: select own" on public.manufacturer_pricing;
+create policy "manufacturer_pricing: select own"
+  on public.manufacturer_pricing for select using (auth.uid() = user_id);
+
+drop policy if exists "manufacturer_pricing: insert own" on public.manufacturer_pricing;
+create policy "manufacturer_pricing: insert own"
+  on public.manufacturer_pricing for insert with check (auth.uid() = user_id);
+
+drop policy if exists "manufacturer_pricing: update own" on public.manufacturer_pricing;
+create policy "manufacturer_pricing: update own"
+  on public.manufacturer_pricing for update
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "manufacturer_pricing: delete own" on public.manufacturer_pricing;
+create policy "manufacturer_pricing: delete own"
+  on public.manufacturer_pricing for delete using (auth.uid() = user_id);
+
+drop trigger if exists trg_manufacturer_pricing_updated_at on public.manufacturer_pricing;
+create trigger trg_manufacturer_pricing_updated_at
+  before update on public.manufacturer_pricing
+  for each row execute function public.set_updated_at();
+
+
+-- ----------------------------------------------------------------------------
+-- 6e) manufacturer_materials  —  dynamisches Materialsystem je Hersteller
+-- ----------------------------------------------------------------------------
+-- Beliebig viele Materialien mit Kategorie, €/m², Beschreibung und Aktiv-Status.
+-- Ersetzt die festen Felder in manufacturer_pricing.material_prices. PRIVAT.
+create table if not exists public.manufacturer_materials (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users (id) on delete cascade,
+  name          text not null,
+  category      text not null default 'sonstiges',
+  price_per_m2  numeric(10,2) not null default 0,
+  description   text,
+  is_active     boolean not null default true,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  unique (user_id, name)
+);
+
+create index if not exists manufacturer_materials_user_id_idx
+  on public.manufacturer_materials (user_id);
+
+alter table public.manufacturer_materials enable row level security;
+
+drop policy if exists "manufacturer_materials: select own" on public.manufacturer_materials;
+create policy "manufacturer_materials: select own"
+  on public.manufacturer_materials for select using (auth.uid() = user_id);
+
+drop policy if exists "manufacturer_materials: insert own" on public.manufacturer_materials;
+create policy "manufacturer_materials: insert own"
+  on public.manufacturer_materials for insert with check (auth.uid() = user_id);
+
+drop policy if exists "manufacturer_materials: update own" on public.manufacturer_materials;
+create policy "manufacturer_materials: update own"
+  on public.manufacturer_materials for update
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+drop policy if exists "manufacturer_materials: delete own" on public.manufacturer_materials;
+create policy "manufacturer_materials: delete own"
+  on public.manufacturer_materials for delete using (auth.uid() = user_id);
+
+drop trigger if exists trg_manufacturer_materials_updated_at on public.manufacturer_materials;
+create trigger trg_manufacturer_materials_updated_at
+  before update on public.manufacturer_materials
   for each row execute function public.set_updated_at();
 
 

@@ -20,6 +20,8 @@ import { Card } from '@/components/ui/Card'
 import { Reveal } from '@/components/ui/Reveal'
 import { Toast } from '@/components/ui/Toast'
 import { RenderingPlaceholder } from '@/components/ui/RenderingPlaceholder'
+import { AmbientScene } from '@/components/ui/AmbientScene'
+import { AiActivityStream, GenerationOverlay } from '@/components/ui/AiActivity'
 import {
   createVersion,
   getIdea,
@@ -32,6 +34,19 @@ import { buildVariants, type Variant, type VariantTier } from '@/lib/variants'
 import { cn, formatEUR } from '@/lib/utils'
 
 const STEPS = ['Idee', 'Entwurf', 'Bearbeiten', 'Perfekt', 'Bestellung']
+const DESIGN_STAGES = [
+  'Idee wird verstanden',
+  'Design wird entworfen',
+  'Maße & Material werden festgelegt',
+  'Visualisierung wird gerendert',
+  'Preis wird berechnet',
+]
+const CHANGE_STAGES = [
+  'Änderung wird verstanden',
+  'Design wird angepasst',
+  'Konzeptblatt wird aktualisiert',
+  'Preis & Varianten werden neu berechnet',
+]
 const CONCEPT_AREAS = [
   'Maße',
   'Material',
@@ -331,7 +346,12 @@ export function Result() {
           setConceptOpen(false)
         }}
       />
-      <GeneratingOverlay show={applying} />
+      <GenerationOverlay
+        show={applying}
+        title="Neue Version entsteht"
+        subtitle="Renderbild, Konzeptblatt, Maße und Preis werden gemeinsam neu erzeugt."
+        stages={CHANGE_STAGES}
+      />
       <Toast message={toast} onClose={() => setToast(null)} />
     </StudioShell>
   )
@@ -342,7 +362,7 @@ export function Result() {
 function StudioShell({ stepIndex, children }: { stepIndex: number; children: React.ReactNode }) {
   return (
     <div className="relative">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-72 bg-gradient-to-b from-cream to-white" />
+      <AmbientScene className="h-[60vh]" />
       <Container className="py-10 sm:py-12">
         <ProcessNav activeIndex={stepIndex} />
         <div className="mt-10">{children}</div>
@@ -402,9 +422,21 @@ function HeroStage({
 }) {
   if (loading || retrying || !idea || idea.status === 'pending') {
     return (
-      <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-3xl border border-ink-100 bg-white shadow-lift">
-        <Sparkles size={30} className="animate-spin text-accent-600" />
-        <p className="text-sm text-ink-500">Dein Entwurf entsteht …</p>
+      <div className="relative flex aspect-[4/3] w-full flex-col justify-center gap-5 overflow-hidden rounded-3xl border border-ink-100 bg-white p-8 shadow-lift">
+        <AmbientScene />
+        <div className="flex items-center gap-3">
+          <span className="relative flex h-9 w-9 items-center justify-center">
+            <span className="animate-status absolute inline-flex h-full w-full rounded-full bg-accent-400/30" />
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-ink-950 text-white">
+              <Sparkles size={15} />
+            </span>
+          </span>
+          <div>
+            <p className="font-semibold text-ink-950">Dein Entwurf entsteht</p>
+            <p className="text-xs text-ink-400">Die KI arbeitet an deinem Möbel.</p>
+          </div>
+        </div>
+        <AiActivityStream stages={DESIGN_STAGES} />
       </div>
     )
   }
@@ -688,41 +720,6 @@ function ConceptModal({
                 Als Änderung übernehmen
               </Button>
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-}
-
-/* ───────────── Overlay während der Neugenerierung ───────────── */
-
-function GeneratingOverlay({ show }: { show: boolean }) {
-  return (
-    <AnimatePresence>
-      {show && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="glass fixed inset-0 z-[60] flex items-center justify-center p-6"
-        >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            className="flex w-full max-w-sm flex-col items-center rounded-3xl border border-ink-100 bg-white p-9 text-center shadow-lift"
-          >
-            <motion.span
-              animate={{ rotate: 360 }}
-              transition={{ duration: 2.4, repeat: Infinity, ease: 'linear' }}
-              className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-500 to-violet-accent text-white shadow-float"
-            >
-              <Wand2 size={26} />
-            </motion.span>
-            <h3 className="mt-6 text-xl font-semibold text-ink-950">Neue Version entsteht</h3>
-            <p className="mt-2 text-sm text-ink-500">
-              Renderbild, Konzeptblatt, Maße, Preis und Varianten werden gemeinsam neu erzeugt …
-            </p>
           </motion.div>
         </motion.div>
       )}

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Factory, Lock, Mail, ShoppingBag, Sparkles, User } from 'lucide-react'
+import { Factory, Lock, Mail, ShoppingBag, User } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
 import { Reveal } from '@/components/ui/Reveal'
+import { AmbientScene } from '@/components/ui/AmbientScene'
+import { Logo } from '@/components/layout/Logo'
 import { useAuth } from '@/context/AuthContext'
 import { getMyProfile, homeForRole, type UserRole } from '@/lib/profile'
 import { cn } from '@/lib/utils'
@@ -69,23 +71,17 @@ export function Login() {
   }
 
   return (
-    <div className="relative">
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-80 bg-gradient-to-b from-cream to-white" />
-      <Container className="max-w-md py-20">
+    <div className="relative min-h-[85vh]">
+      <AmbientScene className="h-[60vh]" />
+      <Container className="max-w-md py-24">
         <Reveal>
-          <div className="rounded-3xl border border-ink-100 bg-white p-8 shadow-lift">
-            <span className="inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white px-3.5 py-1.5 text-sm font-medium text-ink-700 shadow-soft">
-              <Sparkles size={14} className="text-accent-600" />
-              {mode === 'signin' ? 'Willkommen zurück' : 'Konto erstellen'}
-            </span>
-            <h1 className="mt-5 text-3xl font-semibold text-ink-950">
-              {mode === 'signin' ? 'Anmelden' : 'Registrieren'}
-            </h1>
-            <p className="mt-2 text-ink-500">
-              {mode === 'signin'
-                ? 'Melde dich an, um deine Ideen zu speichern und zu verwalten.'
-                : 'Erstelle ein Konto – als Kunde oder als Hersteller.'}
-            </p>
+          <div className="rounded-3xl border border-ink-100 bg-white/90 p-8 shadow-soft backdrop-blur">
+            <div className="flex flex-col items-center text-center">
+              <Logo />
+              <h1 className="mt-6 text-2xl font-semibold tracking-tight text-ink-950">
+                {mode === 'signin' ? 'Anmelden' : 'Konto erstellen'}
+              </h1>
+            </div>
 
             <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
               {mode === 'signup' && (

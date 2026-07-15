@@ -7,18 +7,6 @@ import { Button } from '@/components/ui/Button'
 import { useAuth } from '@/context/AuthContext'
 import { Logo } from './Logo'
 
-const customerLinks = [
-  { to: '/create', label: 'Idee erstellen' },
-  { to: '/manufacturers', label: 'Hersteller' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/profile', label: 'Profil' },
-]
-
-const manufacturerLinks = [
-  { to: '/manufacturer', label: 'Dashboard' },
-  { to: '/manufacturer/onboarding', label: 'Unternehmensdaten' },
-]
-
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
@@ -27,11 +15,27 @@ export function Navbar() {
   const { user, role, signOut } = useAuth()
 
   const isManufacturer = role === 'manufacturer'
-  const links = isManufacturer ? manufacturerLinks : customerLinks
-  // Primärer CTA: Hersteller → eigenes Dashboard, sonst → Idee erstellen.
-  const cta = isManufacturer
-    ? { to: '/manufacturer', label: 'Dashboard' }
-    : { to: '/create', label: 'Jetzt starten' }
+  const loggedIn = Boolean(user)
+
+  // Sehr kurze, rollenabhängige Navigation. Ausgeloggt: keine Links.
+  const links = !loggedIn
+    ? []
+    : isManufacturer
+      ? [
+          { to: '/manufacturer', label: 'Aufträge' },
+          { to: '/manufacturer/onboarding', label: 'Mein Unternehmen' },
+        ]
+      : [
+          { to: '/dashboard', label: 'Meine Projekte' },
+          { to: '/profile', label: 'Profil' },
+        ]
+
+  // Genau eine Hauptaktion (für Hersteller keine – ihr Fokus liegt im Dashboard).
+  const primary = !loggedIn
+    ? { to: '/login', label: 'Kostenlos starten' }
+    : isManufacturer
+      ? null
+      : { to: '/create', label: 'Neue Idee' }
 
   const handleSignOut = async () => {
     await signOut()
@@ -53,13 +57,11 @@ export function Navbar() {
     <header className="fixed inset-x-0 top-0 z-50">
       <div
         className={cn(
-          'transition-all duration-300 ease-[var(--ease-smooth)]',
-          scrolled
-            ? 'glass border-b border-ink-100/80'
-            : 'bg-transparent border-b border-transparent',
+          'transition-colors duration-200',
+          scrolled ? 'border-b border-ink-100 bg-white/85 backdrop-blur' : 'bg-transparent',
         )}
       >
-        <nav className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6 sm:px-8">
+        <nav className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between px-6">
           <Logo />
 
           <div className="hidden items-center gap-1 md:flex">
@@ -69,10 +71,8 @@ export function Navbar() {
                 to={link.to}
                 className={({ isActive }) =>
                   cn(
-                    'rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200',
-                    isActive
-                      ? 'text-ink-950'
-                      : 'text-ink-500 hover:text-ink-900',
+                    'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+                    isActive ? 'text-ink-950' : 'text-ink-500 hover:text-ink-900',
                   )
                 }
               >
@@ -81,25 +81,27 @@ export function Navbar() {
             ))}
           </div>
 
-          <div className="hidden items-center gap-2 md:flex">
-            {user ? (
+          <div className="hidden items-center gap-3 md:flex">
+            {loggedIn ? (
               <button
                 onClick={handleSignOut}
-                className="px-3 py-2 text-sm font-medium text-ink-600 transition-colors hover:text-ink-950"
+                className="text-sm font-medium text-ink-500 transition-colors hover:text-ink-900"
               >
                 Abmelden
               </button>
             ) : (
               <Link
                 to="/login"
-                className="px-3 py-2 text-sm font-medium text-ink-600 transition-colors hover:text-ink-950"
+                className="text-sm font-medium text-ink-500 transition-colors hover:text-ink-900"
               >
                 Anmelden
               </Link>
             )}
-            <Button to={cta.to} size="sm">
-              {cta.label}
-            </Button>
+            {primary && (
+              <Button to={primary.to} size="sm">
+                {primary.label}
+              </Button>
+            )}
           </div>
 
           <button
@@ -118,8 +120,8 @@ export function Navbar() {
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2 }}
-            className="glass mx-4 mt-2 rounded-2xl border border-ink-100 p-3 shadow-float md:hidden"
+            transition={{ duration: 0.15 }}
+            className="mx-4 mt-2 rounded-2xl border border-ink-100 bg-white p-3 shadow-lift md:hidden"
           >
             {links.map((link) => (
               <NavLink
@@ -128,9 +130,7 @@ export function Navbar() {
                 className={({ isActive }) =>
                   cn(
                     'block rounded-xl px-4 py-3 text-sm font-medium transition-colors',
-                    isActive
-                      ? 'bg-ink-100 text-ink-950'
-                      : 'text-ink-600 hover:bg-ink-50',
+                    isActive ? 'bg-ink-100 text-ink-950' : 'text-ink-600 hover:bg-ink-50',
                   )
                 }
               >
@@ -138,7 +138,7 @@ export function Navbar() {
               </NavLink>
             ))}
             <div className="mt-2 border-t border-ink-100 pt-3">
-              {user ? (
+              {loggedIn ? (
                 <button
                   onClick={handleSignOut}
                   className="mb-2 block w-full rounded-xl px-4 py-3 text-left text-sm font-medium text-ink-600 hover:bg-ink-50"
@@ -153,9 +153,11 @@ export function Navbar() {
                   Anmelden
                 </NavLink>
               )}
-              <Button to={cta.to} size="md" className="w-full">
-                {cta.label}
-              </Button>
+              {primary && (
+                <Button to={primary.to} size="md" className="w-full">
+                  {primary.label}
+                </Button>
+              )}
             </div>
           </motion.div>
         )}

@@ -240,7 +240,7 @@ export function Result() {
       {!idea ? (
         <div className="flex min-h-[40vh] items-center justify-center text-ink-400">Lädt …</div>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
+        <div className="grid w-full min-w-0 grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
           {/* LINKS — Möbel, Versionen, Änderungen */}
           <section className="flex w-full min-w-0 flex-col">
             {/* Kopf: Name · Version · Konzeptblatt */}

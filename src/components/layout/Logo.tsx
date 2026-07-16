@@ -18,7 +18,7 @@ export function Logo({
     >
       <img
         src="/logo.png"
-        alt="Forma Logo"
+        alt="Faiviq Logo"
         className={cn('h-10 w-10 object-contain', tight && '-mr-2')}
       />
       <span
@@ -27,7 +27,7 @@ export function Logo({
           light ? 'text-white' : 'text-ink-950',
         )}
       >
-        Forma
+        Faiviq
       </span>
     </Link>
   )

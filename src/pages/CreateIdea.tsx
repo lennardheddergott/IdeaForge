@@ -72,7 +72,7 @@ export function CreateIdea() {
         setGenerating(false)
         setRejection(
           updated.error ??
-            'Forma ist aktuell ausschließlich auf die Entwicklung und Anfertigung von Möbelstücken spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.',
+            'Faiviq ist aktuell ausschließlich auf die Entwicklung und Anfertigung von Möbelstücken spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.',
         )
         return
       }

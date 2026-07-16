@@ -1,7 +1,7 @@
 // ============================================================================
 // Projekt-Sicht (View-Model) für das Kunden-Dashboard
 // ============================================================================
-// In Forma IST eine generierte Idee das "Projekt": Titel, Kategorie, Maße,
+// In Faiviq IST eine generierte Idee das "Projekt": Titel, Kategorie, Maße,
 // Material, Bild, Konzeptblatt und Preis liegen in `ideas` / `ideas.concept`.
 // Eine `order` ist die "Herstelleranfrage". Dieses Modul fügt beide zu einer
 // nutzerfreundlichen Projekt-Ansicht mit kombiniertem Status zusammen –

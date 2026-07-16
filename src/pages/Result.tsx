@@ -906,7 +906,7 @@ function RejectedView({ message }: { message: string | null }) {
             </h1>
             <p className="mt-3 text-pretty leading-relaxed text-ink-500">
               {message ??
-                'Forma ist aktuell ausschließlich auf die Entwicklung und Anfertigung von Möbelstücken spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'}
+                'Faiviq ist aktuell ausschließlich auf die Entwicklung und Anfertigung von Möbelstücken spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'}
             </p>
             <Button to="/create" className="group mt-6">
               Neue Möbelidee beschreiben

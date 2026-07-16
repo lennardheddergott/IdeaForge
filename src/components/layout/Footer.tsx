@@ -8,7 +8,7 @@ export function Footer() {
       <Container className="flex flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">
         <Logo />
         <p className="text-sm text-ink-400">
-          © {year} Forma · Vom Text zum fertigen Möbel
+          © {year} Faiviq · Vom Text zum fertigen Möbel
         </p>
       </Container>
     </footer>

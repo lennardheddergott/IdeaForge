@@ -176,7 +176,7 @@ export function IdeaFlow({ onActiveChange }: { onActiveChange?: (active: boolean
                         title="Das ist (noch) kein Möbelstück"
                         body={
                           message ??
-                          'Forma ist aktuell ausschließlich auf Möbelstücke spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'
+                          'Faiviq ist aktuell ausschließlich auf Möbelstücke spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'
                         }
                         onAction={reset}
                         actionLabel="Neue Möbelidee beschreiben"

@@ -1,5 +1,5 @@
 -- ============================================================================
--- Forma — Datenbank-Schema (Supabase / PostgreSQL)
+-- Faiviq — Datenbank-Schema (Supabase / PostgreSQL)
 -- ============================================================================
 -- Auth-Methode: E-Mail + Passwort (Supabase Auth, Tabelle auth.users)
 --

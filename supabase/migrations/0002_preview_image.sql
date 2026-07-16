@@ -5,7 +5,7 @@
 --   - concept_sheet_url : technisches Engineering-/CAD-Konzeptblatt (bisher image_url)
 --   - preview_image_url : fotorealistische Produktvorschau (NEU)
 --
--- Auf eine bestehende Forma-Datenbank anwenden (Supabase → SQL Editor → Run).
+-- Auf eine bestehende Faiviq-Datenbank anwenden (Supabase → SQL Editor → Run).
 -- Bei einer frischen Installation steckt alles bereits in schema.sql.
 -- Idempotent: kann gefahrlos mehrfach ausgeführt werden.
 -- ============================================================================

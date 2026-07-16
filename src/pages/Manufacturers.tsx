@@ -53,7 +53,7 @@ export function Manufacturers() {
           </h1>
           <p className="mt-4 max-w-xl text-lg leading-relaxed text-ink-500">
             Kuratierte Fertigungspartner für individuelle Möbel. Beschreibe deine
-            Idee – Forma schlägt dir automatisch den passenden Hersteller vor.
+            Idee – Faiviq schlägt dir automatisch den passenden Hersteller vor.
           </p>
         </Reveal>
 
@@ -113,7 +113,7 @@ export function Manufacturers() {
               Bereit für dein eigenes Möbelstück?
             </h2>
             <p className="max-w-md text-sm leading-relaxed text-ink-500">
-              Beschreibe deine Idee – Forma entwickelt das Konzept und findet
+              Beschreibe deine Idee – Faiviq entwickelt das Konzept und findet
               den passenden Hersteller aus dem Netzwerk.
             </p>
             <Button to="/create" size="lg" className="group mt-1">

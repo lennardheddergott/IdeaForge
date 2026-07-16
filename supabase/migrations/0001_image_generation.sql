@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Migration 0001 — OpenAI-Bildgenerierung (gpt-image-2)
 -- ============================================================================
--- Wende dieses Script auf eine BEREITS bestehende Forma-Datenbank an
+-- Wende dieses Script auf eine BEREITS bestehende Faiviq-Datenbank an
 -- (Supabase Dashboard → SQL Editor → einfügen → Run). Bei einer frischen
 -- Installation ist alles schon in schema.sql enthalten; dann ist diese
 -- Migration nicht nötig.

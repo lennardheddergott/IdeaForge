@@ -6,7 +6,7 @@
 --   - manufacturer_profiles      : Unternehmensdaten eines Herstellers
 --   - orders                     : Aufträge (Kunde → optional Hersteller)
 --
--- Auf eine BEREITS bestehende Forma-Datenbank anwenden
+-- Auf eine BEREITS bestehende Faiviq-Datenbank anwenden
 -- (Supabase Dashboard → SQL Editor → einfügen → Run). Bei einer frischen
 -- Installation steckt alles bereits in schema.sql.
 -- Idempotent: kann gefahrlos mehrfach ausgeführt werden.

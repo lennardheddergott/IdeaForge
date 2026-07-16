@@ -11,7 +11,7 @@ export function Testimonials() {
         <SectionHeading
           eyebrow="Geschätzt von Tausenden"
           title="Was unsere Nutzer sagen"
-          subtitle="Designer, Hersteller und Menschen mit großen Ideen – sie alle bauen mit Forma."
+          subtitle="Designer, Hersteller und Menschen mit großen Ideen – sie alle bauen mit Faiviq."
         />
 
         <div className="mt-16 columns-1 gap-5 sm:columns-2 lg:columns-2 [&>*]:mb-5">

@@ -113,7 +113,7 @@ export const testimonials: Testimonial[] = [
   },
   {
     quote:
-      'Als Tischlerei bekommen wir über Forma perfekt vorbereitete Anfragen – mit Maßen, Materialien und Budget. Das spart uns enorm viel Zeit.',
+      'Als Tischlerei bekommen wir über Faiviq perfekt vorbereitete Anfragen – mit Maßen, Materialien und Budget. Das spart uns enorm viel Zeit.',
     name: 'Markus Hoffmann',
     role: 'Inhaber, Hoffmann Manufaktur',
     initials: 'MH',
@@ -127,7 +127,7 @@ export const testimonials: Testimonial[] = [
   },
   {
     quote:
-      'Wir haben unsere komplette Büroeinrichtung über Forma entworfen. Investoren waren begeistert, wie professionell das Ergebnis wirkt.',
+      'Wir haben unsere komplette Büroeinrichtung über Faiviq entworfen. Investoren waren begeistert, wie professionell das Ergebnis wirkt.',
     name: 'Daniel Krüger',
     role: 'COO, Northbound',
     initials: 'DK',

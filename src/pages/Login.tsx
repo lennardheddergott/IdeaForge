@@ -78,9 +78,9 @@ export function Login() {
         <Reveal>
           {/* Header – NICHT Teil der Card */}
           <div className="flex flex-col items-center text-center">
-            <img src="/logo.png" alt="Forma Logo" className="h-[160px] w-[160px] object-contain" />
+            <img src="/logo.png" alt="Faiviq Logo" className="h-[160px] w-[160px] object-contain" />
             <span className="-mt-[22px] font-sans text-[44px] font-extrabold leading-none tracking-[-0.03em] text-[#0F172A]">
-              Forma
+              Faiviq
             </span>
             <p className="mt-2 text-ink-500">
               {mode === 'signin' ? 'Melde dich in deinem Konto an' : 'Erstelle dein Konto'}

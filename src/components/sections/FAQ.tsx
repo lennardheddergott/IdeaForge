@@ -16,7 +16,7 @@ export function FAQ() {
         <SectionHeading
           eyebrow="FAQ"
           title="Häufige Fragen"
-          subtitle="Alles, was du über Forma wissen musst."
+          subtitle="Alles, was du über Faiviq wissen musst."
         />
 
         <div className="mt-14 flex flex-col gap-3">

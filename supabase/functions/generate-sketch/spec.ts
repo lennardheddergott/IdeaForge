@@ -15,7 +15,7 @@ const OPENAI_CHAT_ENDPOINT = 'https://api.openai.com/v1/chat/completions'
 
 /** Freundliche Standard-Ablehnung für themenfremde Eingaben. */
 export const REJECTION_MESSAGE =
-  'Forma ist aktuell ausschließlich auf die Entwicklung und Anfertigung von Möbelstücken spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'
+  'Faiviq ist aktuell ausschließlich auf die Entwicklung und Anfertigung von Möbelstücken spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'
 
 /** Maß-Angabe. */
 export interface SpecMasse {
@@ -109,7 +109,7 @@ export interface IdeaInputForSpec {
 
 /** System-Prompt: zwingt Klassifikation + strukturierte deutsche JSON-Spec. */
 const SPEC_SYSTEM_PROMPT = [
-  'Du bist der Produktanalyst von Forma, einer Plattform AUSSCHLIESSLICH für die Gestaltung und Anfertigung von Möbelstücken.',
+  'Du bist der Produktanalyst von Faiviq, einer Plattform AUSSCHLIESSLICH für die Gestaltung und Anfertigung von Möbelstücken.',
   '',
   'AUFGABE: Analysiere die Nutzereingabe und gib AUSSCHLIESSLICH ein JSON-Objekt zurück (kein Markdown, kein Fließtext drumherum).',
   '',

@@ -9,18 +9,20 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import { getMyProfile, type UserRole } from '@/lib/profile'
+import { getMyProfile, profileIsPro, type UserRole } from '@/lib/profile'
 
 interface AuthContextValue {
   session: Session | null
   user: User | null
   /** Rolle des eingeloggten Nutzers (null, solange unbekannt / nicht angemeldet). */
   role: UserRole | null
+  /** true, wenn der Nutzer eine aktive Pro-Berechtigung hat. */
+  isPro: boolean
   /** true, solange die initiale Session noch geladen wird. */
   loading: boolean
   /** true, solange das Profil (inkl. Rolle) zur aktuellen Session geladen wird. */
   profileLoading: boolean
-  /** Lädt die Rolle erneut (z. B. nach dem Anlegen eines Profils). */
+  /** Lädt Rolle + Pro-Status erneut (z. B. nach dem Anlegen/Ändern des Profils). */
   refreshRole: () => Promise<void>
   signUp: (
     email: string,
@@ -38,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [role, setRole] = useState<UserRole | null>(null)
+  const [isPro, setIsPro] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
 
   useEffect(() => {
@@ -63,14 +66,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const loadProfile = async () => {
       if (!userId) {
         setRole(null)
+        setIsPro(false)
         return
       }
       setProfileLoading(true)
       try {
         const profile = await getMyProfile()
-        if (!cancelled) setRole(profile?.role ?? null)
+        if (!cancelled) {
+          setRole(profile?.role ?? null)
+          setIsPro(profileIsPro(profile))
+        }
       } catch {
-        if (!cancelled) setRole(null)
+        if (!cancelled) {
+          setRole(null)
+          setIsPro(false)
+        }
       } finally {
         if (!cancelled) setProfileLoading(false)
       }
@@ -86,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!session?.user?.id) return
     const profile = await getMyProfile()
     setRole(profile?.role ?? null)
+    setIsPro(profileIsPro(profile))
   }, [session?.user?.id])
 
   const value = useMemo<AuthContextValue>(
@@ -93,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       user: session?.user ?? null,
       role,
+      isPro,
       loading,
       profileLoading,
       refreshRole,
@@ -118,7 +130,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut()
       },
     }),
-    [session, role, loading, profileLoading, refreshRole],
+    [session, role, isPro, loading, profileLoading, refreshRole],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

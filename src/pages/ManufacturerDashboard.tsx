@@ -57,6 +57,8 @@ export function ManufacturerDashboard() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  // Kennzahl-Filter: zeigt nur den gewählten Auftragsbereich ('all' = alle).
+  const [focus, setFocus] = useState<'all' | 'new' | 'running' | 'done'>('all')
 
   const loadOrders = useCallback(async () => {
     setOrders(await listManufacturerOrders())
@@ -190,11 +192,18 @@ export function ManufacturerDashboard() {
   }
   if (!profile) return null
 
-  const stats = [
-    { label: 'Neue Aufträge', value: groups.new.length, icon: Inbox },
-    { label: 'Laufende Aufträge', value: groups.running.length, icon: Clock },
-    { label: 'Abgeschlossen', value: groups.done.length, icon: CheckCircle2 },
+  const stats: {
+    key: 'new' | 'running' | 'done'
+    label: string
+    value: number
+    icon: typeof Inbox
+  }[] = [
+    { key: 'new', label: 'Neue Aufträge', value: groups.new.length, icon: Inbox },
+    { key: 'running', label: 'Laufende Aufträge', value: groups.running.length, icon: Clock },
+    { key: 'done', label: 'Abgeschlossen', value: groups.done.length, icon: CheckCircle2 },
   ]
+  const focusLabel = stats.find((s) => s.key === focus)?.label ?? ''
+  const show = (key: 'new' | 'running' | 'done') => focus === 'all' || focus === key
 
   return (
     <div className="relative">
@@ -242,19 +251,37 @@ export function ManufacturerDashboard() {
           </Reveal>
         )}
 
-        {/* stats */}
+        {/* Kennzahlen = Filter für die Auftragsbereiche */}
         <div className="mt-8 grid grid-cols-3 gap-4">
-          {stats.map((s, i) => (
-            <Reveal key={s.label} delay={i * 0.05}>
-              <Card className="p-5" hover>
-                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink-950 text-white">
-                  <s.icon size={16} />
-                </span>
-                <p className="mt-4 text-3xl font-semibold text-ink-950">{s.value}</p>
-                <p className="mt-0.5 text-sm text-ink-400">{s.label}</p>
-              </Card>
-            </Reveal>
-          ))}
+          {stats.map((s, i) => {
+            const active = focus === s.key
+            return (
+              <Reveal key={s.key} delay={i * 0.05}>
+                <button
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setFocus((cur) => (cur === s.key ? 'all' : s.key))}
+                  className={cn(
+                    'w-full rounded-3xl border bg-white p-5 text-left shadow-soft transition-all duration-300 ease-[var(--ease-smooth)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-2',
+                    active
+                      ? 'border-accent-300 ring-1 ring-accent-500'
+                      : 'border-ink-100 hover:-translate-y-1 hover:border-ink-200 hover:shadow-lift',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-9 w-9 items-center justify-center rounded-xl text-white transition-colors',
+                      active ? 'bg-accent-600' : 'bg-ink-950',
+                    )}
+                  >
+                    <s.icon size={16} />
+                  </span>
+                  <p className="mt-4 text-3xl font-semibold text-ink-950">{s.value}</p>
+                  <p className="mt-0.5 text-sm text-ink-400">{s.label}</p>
+                </button>
+              </Reveal>
+            )
+          })}
         </div>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_1.6fr]">
@@ -369,6 +396,22 @@ export function ManufacturerDashboard() {
 
           {/* Aufträge */}
           <div className="flex flex-col gap-8">
+            {focus !== 'all' && (
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-accent-100 bg-accent-50/60 px-4 py-2.5">
+                <span className="text-sm font-medium text-accent-700">
+                  Gefiltert: {focusLabel}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setFocus('all')}
+                  className="text-sm font-medium text-accent-700 underline-offset-2 hover:underline"
+                >
+                  Alle anzeigen
+                </button>
+              </div>
+            )}
+
+            {show('new') && (
             <OrderSection
               icon={Inbox}
               title="Neue Aufträge"
@@ -400,7 +443,9 @@ export function ManufacturerDashboard() {
                 </div>
               )}
             />
+            )}
 
+            {show('running') && (
             <OrderSection
               icon={Clock}
               title="Laufende Aufträge"
@@ -430,7 +475,9 @@ export function ManufacturerDashboard() {
                 </div>
               )}
             />
+            )}
 
+            {show('done') && (
             <OrderSection
               icon={CheckCircle2}
               title="Abgeschlossene Aufträge"
@@ -438,6 +485,7 @@ export function ManufacturerDashboard() {
               orders={groups.done}
               busyId={busyId}
             />
+            )}
           </div>
         </div>
       </Container>

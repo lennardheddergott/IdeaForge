@@ -1,11 +1,10 @@
 import { useMemo, useState } from 'react'
 import {
+  ArrowRight,
   BadgeCheck,
-  Check,
   Clock,
   MapPin,
   Search,
-  Send,
   Star,
 } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
@@ -24,7 +23,6 @@ const priceFilters = [
 export function Manufacturers() {
   const [query, setQuery] = useState('')
   const [price, setPrice] = useState(0)
-  const [sent, setSent] = useState<string[]>([])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -48,14 +46,14 @@ export function Manufacturers() {
         <Reveal>
           <span className="inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white px-3.5 py-1.5 text-sm font-medium text-ink-700 shadow-soft">
             <BadgeCheck size={14} className="text-accent-600" />
-            Schritt 3 von 3 · Produktionspartner
+            Unser Herstellernetzwerk
           </span>
           <h1 className="mt-6 text-balance text-4xl font-semibold leading-[1.05] text-ink-950 sm:text-5xl">
-            Passende Hersteller für dein Design
+            Geprüfte Manufakturen für dein Möbelstück
           </h1>
           <p className="mt-4 max-w-xl text-lg leading-relaxed text-ink-500">
-            Kuratierte, geprüfte Manufakturen, die dein Unikat fertigen können –
-            sortiert nach Eignung für „Aurelio — TV-Board".
+            Kuratierte Fertigungspartner für individuelle Möbel. Beschreibe deine
+            Idee – IdeaForge schlägt dir automatisch den passenden Hersteller vor.
           </p>
         </Reveal>
 
@@ -97,11 +95,7 @@ export function Manufacturers() {
         <div className="mt-8 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {filtered.map((m, i) => (
             <Reveal key={m.id} delay={(i % 3) * 0.06}>
-              <ManufacturerCard
-                m={m}
-                sent={sent.includes(m.id)}
-                onSend={() => setSent((prev) => [...prev, m.id])}
-              />
+              <ManufacturerCard m={m} />
             </Reveal>
           ))}
         </div>
@@ -111,22 +105,34 @@ export function Manufacturers() {
             Keine Hersteller gefunden. Passe deine Suche an.
           </p>
         )}
+
+        {/* Echte Handlung: eigenen Idee-Flow starten (Matching erfolgt automatisch) */}
+        <Reveal>
+          <div className="mt-12 flex flex-col items-center gap-3 rounded-3xl border border-ink-100 bg-white p-8 text-center shadow-soft">
+            <h2 className="text-xl font-semibold text-ink-950">
+              Bereit für dein eigenes Möbelstück?
+            </h2>
+            <p className="max-w-md text-sm leading-relaxed text-ink-500">
+              Beschreibe deine Idee – IdeaForge entwickelt das Konzept und findet
+              den passenden Hersteller aus dem Netzwerk.
+            </p>
+            <Button to="/create" size="lg" className="group mt-1">
+              Eigene Idee starten
+              <ArrowRight
+                size={18}
+                className="transition-transform duration-300 group-hover:translate-x-0.5"
+              />
+            </Button>
+          </div>
+        </Reveal>
       </Container>
     </div>
   )
 }
 
-function ManufacturerCard({
-  m,
-  sent,
-  onSend,
-}: {
-  m: Manufacturer
-  sent: boolean
-  onSend: () => void
-}) {
+function ManufacturerCard({ m }: { m: Manufacturer }) {
   return (
-    <div className="group flex h-full flex-col rounded-3xl border border-ink-100 bg-white p-6 shadow-soft transition-all duration-300 ease-[var(--ease-smooth)] hover:-translate-y-1 hover:border-ink-200 hover:shadow-lift">
+    <div className="flex h-full flex-col rounded-3xl border border-ink-100 bg-white p-6 shadow-soft">
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-ink-950 text-sm font-semibold text-white">
@@ -183,19 +189,7 @@ function ManufacturerCard({
         </span>
       </div>
 
-      <div className="mt-5">
-        {sent ? (
-          <div className="flex h-11 items-center justify-center gap-2 rounded-full bg-emerald-50 text-sm font-medium text-emerald-600">
-            <Check size={16} /> Anfrage gesendet
-          </div>
-        ) : (
-          <Button onClick={onSend} className="w-full" size="md">
-            <Send size={16} /> Anfrage senden
-          </Button>
-        )}
-      </div>
-
-      <p className="mt-3 text-center text-xs text-ink-400">
+      <p className="mt-5 border-t border-ink-100 pt-4 text-center text-xs text-ink-400">
         {m.reviews} verifizierte Bewertungen
       </p>
     </div>

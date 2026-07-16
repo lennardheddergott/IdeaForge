@@ -10,12 +10,16 @@
 -- ============================================================================
 
 -- 1) ideas: neue Status-Werte 'pending' und 'failed' erlauben -----------------
+-- Hinweis: 'rejected' (themenfremde Eingabe) ist hier bereits enthalten, damit
+-- diese Migration auch auf Datenbanken läuft, in denen bereits 'rejected'-Zeilen
+-- existieren (der Wert wird fachlich erst mit Migration 0004 eingeführt). So
+-- bleiben bestehende Daten kompatibel und der Constraint ist konsistent zu 0004.
 alter table public.ideas
   drop constraint if exists ideas_status_check;
 
 alter table public.ideas
   add constraint ideas_status_check
-  check (status in ('draft', 'pending', 'generated', 'failed'));
+  check (status in ('draft', 'pending', 'generated', 'failed', 'rejected'));
 
 -- 2) ideas: Spalten für Ergebnis-URL und Fehlerursache -----------------------
 alter table public.ideas

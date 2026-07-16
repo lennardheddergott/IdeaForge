@@ -485,6 +485,12 @@ drop policy if exists "manufacturer_pricing: select own" on public.manufacturer_
 create policy "manufacturer_pricing: select own"
   on public.manufacturer_pricing for select using (auth.uid() = user_id);
 
+-- Kunden benötigen die Herstellerkalkulation als EINZIGE Preisquelle → SELECT
+-- für eingeloggte Nutzer geöffnet (Schreibzugriff bleibt Eigentümer-only).
+drop policy if exists "manufacturer_pricing: authenticated read" on public.manufacturer_pricing;
+create policy "manufacturer_pricing: authenticated read"
+  on public.manufacturer_pricing for select using (auth.uid() is not null);
+
 drop policy if exists "manufacturer_pricing: insert own" on public.manufacturer_pricing;
 create policy "manufacturer_pricing: insert own"
   on public.manufacturer_pricing for insert with check (auth.uid() = user_id);
@@ -530,6 +536,12 @@ alter table public.manufacturer_materials enable row level security;
 drop policy if exists "manufacturer_materials: select own" on public.manufacturer_materials;
 create policy "manufacturer_materials: select own"
   on public.manufacturer_materials for select using (auth.uid() = user_id);
+
+-- Kunden benötigen die aktiven Materialien für die Preis-Schätzung → SELECT
+-- für eingeloggte Nutzer geöffnet (Schreibzugriff bleibt Eigentümer-only).
+drop policy if exists "manufacturer_materials: authenticated read" on public.manufacturer_materials;
+create policy "manufacturer_materials: authenticated read"
+  on public.manufacturer_materials for select using (auth.uid() is not null);
 
 drop policy if exists "manufacturer_materials: insert own" on public.manufacturer_materials;
 create policy "manufacturer_materials: insert own"
@@ -602,6 +614,65 @@ create policy "idea-sketches: public read"
   using (bucket_id = 'idea-sketches');
 -- Kein INSERT/UPDATE/DELETE für normale Nutzer → nur die Service-Role (Edge
 -- Function) schreibt in diesen Bucket.
+
+-- ============================================================================
+-- 9) RAUMPLANUNG (Pro) — room_projects + ideas-Verknüpfung + Abo-Stufe
+-- ============================================================================
+-- Siehe Migration 0011. Ein Raumprojekt bündelt mehrere Möbel; jedes Möbel ist
+-- eine normale idea (room_project_id). subscription_tier steuert isPro.
+alter table public.profiles
+  add column if not exists subscription_tier text not null default 'free'
+    check (subscription_tier in ('free', 'pro'));
+
+create table if not exists public.room_projects (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references auth.users (id) on delete cascade,
+  name              text not null default 'Mein Raum',
+  room_type         text,
+  style             text,
+  description       text,
+  photo_path        text,
+  result_image_url  text,
+  render_model      text,
+  render_prompt     text,
+  render_error      text,
+  status            text not null default 'processing'
+                    check (status in ('processing', 'rendering', 'ready', 'failed')),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now()
+);
+
+create index if not exists room_projects_user_id_idx on public.room_projects (user_id);
+alter table public.room_projects enable row level security;
+
+drop policy if exists "room_projects: select own" on public.room_projects;
+create policy "room_projects: select own"
+  on public.room_projects for select using (auth.uid() = user_id);
+drop policy if exists "room_projects: insert own" on public.room_projects;
+create policy "room_projects: insert own"
+  on public.room_projects for insert with check (auth.uid() = user_id);
+drop policy if exists "room_projects: update own" on public.room_projects;
+create policy "room_projects: update own"
+  on public.room_projects for update
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+drop policy if exists "room_projects: delete own" on public.room_projects;
+create policy "room_projects: delete own"
+  on public.room_projects for delete using (auth.uid() = user_id);
+
+drop trigger if exists trg_room_projects_updated_at on public.room_projects;
+create trigger trg_room_projects_updated_at
+  before update on public.room_projects
+  for each row execute function public.set_updated_at();
+
+alter table public.ideas
+  add column if not exists room_project_id uuid
+    references public.room_projects (id) on delete cascade,
+  add column if not exists room_position text,
+  add column if not exists room_bbox jsonb,       -- markierte Region = Hotspot
+  add column if not exists room_selected boolean not null default true;
+
+create index if not exists ideas_room_project_id_idx on public.ideas (room_project_id);
+
 
 -- ============================================================================
 -- Ende des Schemas

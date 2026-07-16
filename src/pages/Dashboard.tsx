@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowRight,
@@ -7,6 +7,8 @@ import {
   FolderOpen,
   Package,
   Plus,
+  Sofa,
+  X,
 } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
@@ -17,6 +19,30 @@ import { cn, formatDate, formatEUR } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { getMyProfile } from '@/lib/profile'
 import { listMyProjects, type Project } from '@/lib/projects'
+import { listRoomProjects, type RoomProject } from '@/lib/roomPlanner'
+
+/** Filter über den Projekt-Kennzahlen. Jede Karte filtert die Liste darunter. */
+type FilterKey = 'all' | 'in_production' | 'completed'
+const FILTERS: {
+  key: FilterKey
+  label: string
+  icon: typeof FolderOpen
+  match: (p: Project) => boolean
+}[] = [
+  { key: 'all', label: 'Projekte', icon: FolderOpen, match: () => true },
+  {
+    key: 'in_production',
+    label: 'In Produktion',
+    icon: Clock,
+    match: (p) => p.status.key === 'in_production',
+  },
+  {
+    key: 'completed',
+    label: 'Abgeschlossen',
+    icon: CheckCircle2,
+    match: (p) => p.status.key === 'completed',
+  },
+]
 
 export function Dashboard() {
   const { user } = useAuth()
@@ -73,22 +99,21 @@ export function Dashboard() {
     }
   }, [])
 
-  const stats = useMemo(() => {
-    const list = projects ?? []
-    return [
-      { label: 'Projekte', value: list.length, icon: FolderOpen },
-      {
-        label: 'In Produktion',
-        value: list.filter((p) => p.status.key === 'in_production').length,
-        icon: Clock,
-      },
-      {
-        label: 'Abgeschlossen',
-        value: list.filter((p) => p.status.key === 'completed').length,
-        icon: CheckCircle2,
-      },
-    ]
-  }, [projects])
+  const [rooms, setRooms] = useState<RoomProject[] | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    listRoomProjects()
+      .then((r) => !cancelled && setRooms(r))
+      .catch(() => !cancelled && setRooms([]))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const [filter, setFilter] = useState<FilterKey>('all')
+  const list = projects ?? []
+  const activeFilter = FILTERS.find((f) => f.key === filter) ?? FILTERS[0]
+  const visible = list.filter(activeFilter.match)
 
   const greeting = name ?? user?.email ?? ''
 
@@ -114,37 +139,88 @@ export function Dashboard() {
           </div>
         </Reveal>
 
-        {/* stats (nur wenn es Projekte gibt) */}
+        {/* Kennzahlen = Filter (nur wenn es Projekte gibt) */}
         {projects && projects.length > 0 && (
           <div className="mt-8 grid grid-cols-3 gap-4">
-            {stats.map((s, i) => (
-              <Reveal key={s.label} delay={i * 0.05}>
-                <Card className="p-5" hover>
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink-950 text-white">
-                    <s.icon size={16} />
-                  </span>
-                  <p className="mt-4 text-3xl font-semibold text-ink-950">{s.value}</p>
-                  <p className="mt-0.5 text-sm text-ink-400">{s.label}</p>
-                </Card>
-              </Reveal>
-            ))}
+            {FILTERS.map((f, i) => {
+              const count = list.filter(f.match).length
+              const active = filter === f.key
+              return (
+                <Reveal key={f.key} delay={i * 0.05}>
+                  <button
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() =>
+                      setFilter((cur) => (f.key === 'all' || cur === f.key ? 'all' : f.key))
+                    }
+                    className={cn(
+                      'w-full rounded-3xl border bg-white p-5 text-left shadow-soft transition-all duration-300 ease-[var(--ease-smooth)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-400 focus-visible:ring-offset-2',
+                      active
+                        ? 'border-accent-300 ring-1 ring-accent-500'
+                        : 'border-ink-100 hover:-translate-y-1 hover:border-ink-200 hover:shadow-lift',
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        'flex h-9 w-9 items-center justify-center rounded-xl text-white transition-colors',
+                        active ? 'bg-accent-600' : 'bg-ink-950',
+                      )}
+                    >
+                      <f.icon size={16} />
+                    </span>
+                    <p className="mt-4 text-3xl font-semibold text-ink-950">{count}</p>
+                    <p className="mt-0.5 text-sm text-ink-400">{f.label}</p>
+                  </button>
+                </Reveal>
+              )
+            })}
           </div>
+        )}
+
+        {/* Raumprojekte (Pro) */}
+        {rooms && rooms.length > 0 && (
+          <Reveal>
+            <div className="mt-8">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
+                <Sofa size={18} className="text-accent-600" /> Raumprojekte
+              </h2>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {rooms.map((r) => (
+                  <RoomProjectCard key={r.id} room={r} />
+                ))}
+              </div>
+            </div>
+          </Reveal>
         )}
 
         {/* Projektübersicht */}
         <Reveal>
           <Card className="mt-8 p-7">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
-              <Package size={18} className="text-accent-600" /> Projektübersicht
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
+                <Package size={18} className="text-accent-600" /> Projektübersicht
+              </h2>
+              {filter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setFilter('all')}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-accent-50 px-3 py-1.5 text-xs font-medium text-accent-700 transition-colors hover:bg-accent-100"
+                >
+                  Gefiltert: {activeFilter.label}
+                  <X size={13} />
+                </button>
+              )}
+            </div>
 
             {projects === null ? (
               <p className="mt-6 text-sm text-ink-400">Lädt …</p>
             ) : projects.length === 0 ? (
               <EmptyState />
+            ) : visible.length === 0 ? (
+              <FilteredEmpty label={activeFilter.label} onReset={() => setFilter('all')} />
             ) : (
               <div className="mt-6 flex flex-col gap-3">
-                {projects.map((p) => (
+                {visible.map((p) => (
                   <ProjectRow key={p.id} project={p} />
                 ))}
               </div>
@@ -182,6 +258,66 @@ function EmptyState() {
           className="transition-transform duration-300 group-hover:translate-x-0.5"
         />
       </Button>
+    </div>
+  )
+}
+
+const ROOM_STATUS: Record<string, { label: string; color: string }> = {
+  processing: { label: 'Möbel entstehen …', color: 'bg-amber-50 text-amber-600' },
+  rendering: { label: 'Raum wird erzeugt …', color: 'bg-violet-50 text-violet-600' },
+  ready: { label: 'Fertig', color: 'bg-emerald-50 text-emerald-600' },
+  failed: { label: 'Fehlgeschlagen', color: 'bg-rose-50 text-rose-600' },
+}
+
+function RoomProjectCard({ room }: { room: RoomProject }) {
+  const st = ROOM_STATUS[room.status] ?? ROOM_STATUS.processing
+  return (
+    <Link to={`/room-planner/${room.id}`} className="group block">
+      <Card hover className="overflow-hidden">
+        <div className="aspect-[16/10] w-full overflow-hidden bg-ink-50">
+          {room.photoUrl ? (
+            <img src={room.photoUrl} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <span className="flex h-full w-full items-center justify-center text-ink-300">
+              <Sofa size={24} />
+            </span>
+          )}
+        </div>
+        <div className="p-4">
+          <div className="flex items-center justify-between gap-2">
+            <span className="rounded-full bg-accent-50 px-2 py-0.5 text-[11px] font-semibold text-accent-700">
+              Raumprojekt
+            </span>
+            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', st.color)}>
+              {st.label}
+            </span>
+          </div>
+          <p className="mt-2 truncate font-semibold text-ink-950">{room.name}</p>
+          <p className="mt-0.5 text-xs text-ink-400">
+            {room.selectedCount ?? 0}/{room.productCount ?? 0} Möbel ausgewählt
+          </p>
+        </div>
+      </Card>
+    </Link>
+  )
+}
+
+function FilteredEmpty({ label, onReset }: { label: string; onReset: () => void }) {
+  return (
+    <div className="mt-6 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-ink-200 bg-ink-50/40 px-6 py-12 text-center">
+      <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-ink-400 shadow-soft">
+        <Package size={22} />
+      </span>
+      <p className="text-sm text-ink-500">
+        Keine Projekte mit dem Status „{label}“.
+      </p>
+      <button
+        type="button"
+        onClick={onReset}
+        className="text-sm font-medium text-accent-600 transition-colors hover:text-accent-700"
+      >
+        Alle Projekte anzeigen
+      </button>
     </div>
   )
 }

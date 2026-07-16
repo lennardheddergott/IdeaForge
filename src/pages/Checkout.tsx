@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Check, Package, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, FileText, Package, ShieldCheck } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Reveal } from '@/components/ui/Reveal'
-import { cn, formatEUR } from '@/lib/utils'
+import { cn } from '@/lib/utils'
 import { getIdea, type Idea } from '@/lib/ideas'
 import { createOrder, getOrderByIdea } from '@/lib/orders'
 import { buildVariants, type Variant, type VariantTier } from '@/lib/variants'
+import {
+  estimateVariant,
+  formatRange,
+  loadManufacturerOffers,
+  type ManufacturerOffer,
+} from '@/lib/estimate'
 
 export function Checkout() {
   const { ideaId } = useParams()
@@ -20,6 +26,10 @@ export function Checkout() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Herstellerangebote = einzige Preisquelle; null = wird geladen.
+  const [offers, setOffers] = useState<ManufacturerOffer[] | null>(null)
+  // Verbindliche Bestätigung des Konzeptblatts (Pflicht vor dem Absenden).
+  const [confirmed, setConfirmed] = useState(false)
 
   // Idee laden. Existiert bereits ein Auftrag → direkt zur Auftragsseite.
   useEffect(() => {
@@ -46,6 +56,17 @@ export function Checkout() {
     }
   }, [ideaId, navigate])
 
+  // Herstellerangebote einmalig laden.
+  useEffect(() => {
+    let cancelled = false
+    loadManufacturerOffers()
+      .then((o) => !cancelled && setOffers(o))
+      .catch(() => !cancelled && setOffers([]))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const spec = idea?.concept ?? null
   const variants = spec ? buildVariants(spec) : null
   const variant: Variant | null =
@@ -54,8 +75,13 @@ export function Checkout() {
     variants?.[1] ??
     null
 
+  // Preisspanne der gewählten Variante – ausschließlich aus der Herstellerkalkulation.
+  const priceRange = spec && variant && offers ? estimateVariant(spec, variant, offers) : null
+  const priceText =
+    offers === null ? 'wird berechnet …' : priceRange ? formatRange(priceRange) : 'auf Anfrage'
+
   const confirm = async () => {
-    if (!idea) return
+    if (!idea || !confirmed) return
     setSubmitting(true)
     setError(null)
     try {
@@ -72,7 +98,8 @@ export function Checkout() {
                     tier: variant.tier,
                     title: variant.title,
                     material: variant.material,
-                    price_from: variant.priceFrom,
+                    price_from: priceRange?.min ?? 0,
+                    price_to: priceRange?.max ?? 0,
                   }
                 : null,
             }
@@ -114,6 +141,7 @@ export function Checkout() {
   }
 
   const preview = idea.preview_image_url ?? idea.image_url
+  const conceptUrl = idea.concept_sheet_url ?? idea.image_url
   const masse: string[] = []
   if (spec.masse.breite_cm) masse.push(`B ${spec.masse.breite_cm} cm`)
   if (spec.masse.hoehe_cm) masse.push(`H ${spec.masse.hoehe_cm} cm`)
@@ -174,14 +202,12 @@ export function Checkout() {
             {/* Preis */}
             <div className="flex items-end justify-between gap-3 border-t border-ink-100 bg-ink-50/50 px-6 py-5">
               <div>
-                <p className="text-sm text-ink-500">Orientierungspreis</p>
+                <p className="text-sm text-ink-500">Geschätzter Endpreis</p>
                 <p className="text-xs text-ink-400">
-                  * noch nicht aus Herstellerprofilen berechnet
+                  auf Basis der tatsächlichen Herstellerkalkulation
                 </p>
               </div>
-              <span className="text-2xl font-semibold text-ink-950">
-                ab {formatEUR(variant.priceFrom)}*
-              </span>
+              <span className="text-2xl font-semibold text-ink-950">{priceText}</span>
             </div>
           </Card>
         </Reveal>
@@ -200,6 +226,50 @@ export function Checkout() {
           </div>
         </Reveal>
 
+        {/* Verbindliche Fertigungsgrundlage + Pflichtbestätigung */}
+        <Reveal>
+          <div className="mt-6 rounded-2xl border border-ink-100 bg-ink-50/60 p-5">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-accent-600 shadow-soft">
+                <FileText size={18} />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-ink-950">
+                  Verbindliche Fertigungsgrundlage
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-ink-500">
+                  Die Herstellung erfolgt ausschließlich anhand des technischen Konzeptblatts.
+                  Die Visualisierung dient zur besseren Vorstellung des Produkts. Bitte prüfe
+                  das Konzeptblatt sorgfältig, bevor du deinen Auftrag freigibst.
+                </p>
+                {conceptUrl && (
+                  <a
+                    href={conceptUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-accent-700 transition-colors hover:text-accent-800"
+                  >
+                    <FileText size={15} /> Konzeptblatt ansehen
+                  </a>
+                )}
+              </div>
+            </div>
+
+            <label className="mt-4 flex cursor-pointer items-start gap-3 border-t border-ink-100 pt-4">
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent-600)]"
+              />
+              <span className="text-sm leading-relaxed text-ink-700">
+                Ich habe das verbindliche Konzeptblatt geprüft und bestätige, dass dieses die
+                Grundlage für die Fertigung meines Produkts ist.
+              </span>
+            </label>
+          </div>
+        </Reveal>
+
         {error && (
           <p className="mt-6 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
@@ -210,7 +280,7 @@ export function Checkout() {
           <Button
             size="lg"
             onClick={confirm}
-            disabled={submitting}
+            disabled={submitting || !confirmed}
             className="group mt-6 w-full"
           >
             {submitting ? 'Wird gesendet …' : 'Bestellung anfragen'}

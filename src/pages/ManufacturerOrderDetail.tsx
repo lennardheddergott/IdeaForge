@@ -298,7 +298,7 @@ export function ManufacturerOrderDetail() {
         </Reveal>
 
         <div className="mt-8">
-          <OrderArtifacts order={order} />
+          <OrderArtifacts order={order} audience="manufacturer" />
         </div>
       </Container>
 

@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   FileText,
   ImagePlus,
-  Save,
   Sparkles,
   Wand2,
   X,
@@ -31,7 +30,13 @@ import {
 } from '@/lib/ideas'
 import { customerOrderStatus, getOrderByIdea, type Order } from '@/lib/orders'
 import { buildVariants, type Variant, type VariantTier } from '@/lib/variants'
-import { cn, formatEUR } from '@/lib/utils'
+import {
+  estimateVariant,
+  formatRange,
+  loadManufacturerOffers,
+  type ManufacturerOffer,
+} from '@/lib/estimate'
+import { cn } from '@/lib/utils'
 
 const STEPS = ['Idee', 'Entwurf', 'Bearbeiten', 'Perfekt', 'Bestellung']
 const DESIGN_STAGES = [
@@ -71,6 +76,8 @@ export function Result() {
   const [conceptOpen, setConceptOpen] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  // Herstellerangebote (einzige Preisquelle); null = wird geladen.
+  const [offers, setOffers] = useState<ManufacturerOffer[] | null>(null)
 
   // Idee laden; solange sie generiert wird ('pending'), nachpollen.
   useEffect(() => {
@@ -96,6 +103,17 @@ export function Result() {
       if (timer) clearTimeout(timer)
     }
   }, [id])
+
+  // Herstellerangebote einmalig laden – Basis der Preisspanne.
+  useEffect(() => {
+    let cancelled = false
+    loadManufacturerOffers()
+      .then((o) => !cancelled && setOffers(o))
+      .catch(() => !cancelled && setOffers([]))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const retry = async () => {
     if (!id) return
@@ -163,6 +181,14 @@ export function Result() {
   const variants = spec ? buildVariants(spec) : null
   const activeTier: VariantTier =
     selectedTier ?? variants?.find((v) => v.recommended)?.tier ?? 'standard'
+
+  // Preis-Label einer Variante – ausschließlich aus der Herstellerkalkulation.
+  const priceLabel = (v: Variant): string => {
+    if (!spec) return ''
+    if (offers === null) return 'Preis wird berechnet …'
+    const r = estimateVariant(spec, v, offers)
+    return r ? formatRange(r) : 'Preis auf Anfrage'
+  }
 
   const goToCheckout = () => {
     if (idea) navigate(`/checkout/${idea.id}?variant=${activeTier}`)
@@ -254,19 +280,17 @@ export function Result() {
             </div>
 
             {/* Unter dem Bild */}
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!prevVersion}
-                onClick={() => prevVersion && navigate(`/result/${prevVersion.id}`)}
-              >
-                <ChevronLeft size={16} /> Zur vorherigen Version
-              </Button>
-              <Button variant="secondary" size="sm" onClick={() => setToast('Entwurf gespeichert.')}>
-                <Save size={16} /> Entwurf speichern
-              </Button>
-            </div>
+            {prevVersion && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => navigate(`/result/${prevVersion.id}`)}
+                >
+                  <ChevronLeft size={16} /> Zur vorherigen Version
+                </Button>
+              </div>
+            )}
 
             {/* Versionsübersicht */}
             {versions.length > 0 && (
@@ -309,6 +333,7 @@ export function Result() {
                   active={v.tier === activeTier}
                   disabled={Boolean(order)}
                   onSelect={() => setSelectedTier(v.tier)}
+                  priceLabel={priceLabel(v)}
                 />
               ))
             ) : (
@@ -316,7 +341,7 @@ export function Result() {
             )}
             {variants && (
               <p className="text-[11px] leading-relaxed text-ink-400">
-                Preise sind Orientierungswerte, noch nicht aus Herstellerprofilen berechnet.
+                Geschätzte Preisspanne auf Basis der tatsächlichen Herstellerkalkulation.
               </p>
             )}
             <div className="mt-1">
@@ -734,11 +759,13 @@ function VariantMini({
   active,
   disabled,
   onSelect,
+  priceLabel,
 }: {
   variant: Variant
   active: boolean
   disabled: boolean
   onSelect: () => void
+  priceLabel: string
 }) {
   return (
     <button
@@ -776,9 +803,9 @@ function VariantMini({
         <li>{v.surface}</li>
         <li>{v.hardware}</li>
       </ul>
-      <div className="mt-3 flex items-center justify-between pl-6">
-        <span className="text-base font-semibold text-ink-950">{formatEUR(v.priceFrom)}</span>
-        <span className="text-xs text-ink-400">
+      <div className="mt-3 flex items-center justify-between gap-2 pl-6">
+        <span className="text-base font-semibold text-ink-950">{priceLabel}</span>
+        <span className="shrink-0 text-xs text-ink-400">
           {v.leadTimeWeeks[0]}–{v.leadTimeWeeks[1]} Wochen
         </span>
       </div>

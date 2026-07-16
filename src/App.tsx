@@ -5,6 +5,8 @@ import { Landing } from '@/pages/Landing'
 import { Login } from '@/pages/Login'
 import { CreateIdea } from '@/pages/CreateIdea'
 import { Result } from '@/pages/Result'
+import { RoomPlanner } from '@/pages/RoomPlanner'
+import { RoomProject } from '@/pages/RoomProject'
 import { Manufacturers } from '@/pages/Manufacturers'
 import { Dashboard } from '@/pages/Dashboard'
 import { Profile } from '@/pages/Profile'
@@ -30,6 +32,9 @@ function App() {
           <Route path="/create" element={<CreateIdea />} />
           <Route path="/result" element={<Result />} />
           <Route path="/result/:id" element={<Result />} />
+          {/* Pro-Funktion: Raumplanung (Guard erfolgt in der Seite via ProGate) */}
+          <Route path="/room-planner" element={<RoomPlanner />} />
+          <Route path="/room-planner/:id" element={<RoomProject />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/checkout/:ideaId" element={<Checkout />} />
           <Route path="/orders/:id" element={<OrderDetail />} />

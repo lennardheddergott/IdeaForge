@@ -1,4 +1,4 @@
-import { Box, Layers, Package, Ruler, Sparkles } from 'lucide-react'
+import { Box, FileText, Layers, Package, Ruler, Sparkles } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { formatEUR } from '@/lib/utils'
 import type { Order } from '@/lib/orders'
@@ -7,8 +7,17 @@ import type { Order } from '@/lib/orders'
  * Geteilte Detail-Anzeige eines Auftrags: Visualisierung + Konzeptblatt sowie
  * die strukturierten Spec-Daten (Beschreibung, Preis, Material, Maße, Details).
  * Wird von der Kunden- UND der Hersteller-Detailseite genutzt.
+ *
+ * `audience` steuert nur den Wortlaut der verbindlichen Fertigungsgrundlage:
+ * Für den Kunden mit Prüf-Aufforderung, für den Hersteller rein informativ.
  */
-export function OrderArtifacts({ order }: { order: Order }) {
+export function OrderArtifacts({
+  order,
+  audience = 'customer',
+}: {
+  order: Order
+  audience?: 'customer' | 'manufacturer'
+}) {
   const spec = order.concept
   const preview = order.preview_image_url
   const sheet = order.concept_sheet_url
@@ -23,8 +32,33 @@ export function OrderArtifacts({ order }: { order: Order }) {
     <div className="flex flex-col gap-8">
       {/* Bilder */}
       <div className="grid gap-5 sm:grid-cols-2">
-        <Figure src={preview} caption="Visualisierung" />
-        <Figure src={sheet} caption="Technisches Konzeptblatt" />
+        <Figure
+          src={preview}
+          caption="Visualisierung"
+          note="Die Visualisierung dient der Veranschaulichung und vermittelt einen möglichst realistischen Eindruck des fertigen Produkts."
+        />
+        <Figure
+          src={sheet}
+          caption="Verbindliches Konzeptblatt"
+          note="Dieses Konzeptblatt bildet die verbindliche Grundlage für die Herstellung deines Produkts."
+        />
+      </div>
+
+      {/* Verbindliche Fertigungsgrundlage – dezente Info-Box im Website-Stil */}
+      <div className="rounded-2xl border border-ink-100 bg-ink-50/60 p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-accent-600 shadow-soft">
+            <FileText size={18} />
+          </span>
+          <div>
+            <p className="text-sm font-semibold text-ink-950">Verbindliche Fertigungsgrundlage</p>
+            <p className="mt-1 text-sm leading-relaxed text-ink-500">
+              {audience === 'manufacturer'
+                ? 'Die Fertigung erfolgt ausschließlich auf Grundlage des verbindlichen Konzeptblatts. Die Visualisierung dient rein informativen Zwecken.'
+                : 'Die Herstellung erfolgt ausschließlich anhand des technischen Konzeptblatts. Die Visualisierung dient zur besseren Vorstellung des Produkts. Bitte prüfe das Konzeptblatt sorgfältig, bevor du deinen Auftrag freigibst.'}
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Beschreibung */}
@@ -42,18 +76,24 @@ export function OrderArtifacts({ order }: { order: Order }) {
         )}
       </Card>
 
-      {/* Preisabschätzung */}
-      {spec?.preis && (spec.preis.min > 0 || spec.preis.max > 0) && (
+      {/* Geschätzter Preis – aus der tatsächlichen Herstellerkalkulation (beim
+          Bestellen festgehalten). KEINE separate KI-/Fallback-Schätzung mehr. */}
+      {spec?.selected_variant && spec.selected_variant.price_from > 0 && (
         <Card className="p-7">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
-            <Sparkles size={18} className="text-accent-600" /> Preisabschätzung
+            <Sparkles size={18} className="text-accent-600" /> Geschätzter Preis
           </h2>
           <p className="mt-3 text-3xl font-semibold text-ink-950">
-            ca. {formatEUR(spec.preis.min)} – {formatEUR(spec.preis.max)}
+            {spec.selected_variant.price_to
+              ? `${formatEUR(spec.selected_variant.price_from)} – ${formatEUR(spec.selected_variant.price_to)}`
+              : `ab ${formatEUR(spec.selected_variant.price_from)}`}
           </p>
-          <p className="mt-1 text-sm text-ink-400">{spec.preis.hinweis}</p>
+          <p className="mt-1 text-sm text-ink-400">
+            Variante · {spec.selected_variant.title}
+          </p>
           <p className="mt-4 rounded-xl bg-ink-50 px-4 py-3 text-xs leading-relaxed text-ink-500">
-            Automatische Schätzung zur Orientierung – ersetzt kein finales Angebot.
+            Auf Basis der tatsächlichen Herstellerkalkulation – identische
+            Berechnungsgrundlage wie in der Herstelleransicht.
           </p>
         </Card>
       )}
@@ -129,8 +169,16 @@ export function OrderArtifacts({ order }: { order: Order }) {
   )
 }
 
-/** Ein klickbares Bild mit Bildunterschrift; Platzhalter, wenn keine URL. */
-function Figure({ src, caption }: { src: string | null; caption: string }) {
+/** Ein klickbares Bild mit Bildunterschrift + dezentem Hinweis; Platzhalter ohne URL. */
+function Figure({
+  src,
+  caption,
+  note,
+}: {
+  src: string | null
+  caption: string
+  note?: string
+}) {
   return (
     <figure className="flex flex-col gap-2">
       {src ? (
@@ -146,7 +194,12 @@ function Figure({ src, caption }: { src: string | null; caption: string }) {
           <Package size={28} />
         </div>
       )}
-      <figcaption className="text-center text-xs text-ink-400">{caption}</figcaption>
+      <figcaption className="text-center text-xs font-medium text-ink-500">{caption}</figcaption>
+      {note && (
+        <p className="mx-auto max-w-[42ch] text-center text-[11px] leading-relaxed text-ink-400">
+          {note}
+        </p>
+      )}
     </figure>
   )
 }

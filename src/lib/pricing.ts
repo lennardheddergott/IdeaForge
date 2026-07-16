@@ -67,23 +67,6 @@ export function resolveMaterialForVariant(
     (m) => normalizeMaterialKey(m.name ?? '') === wanted,
   )
 
-  // Debug-Ausgabe (nur in der Entwicklung).
-  if (import.meta.env?.DEV) {
-    console.log(
-      '[pricing] Variante:', variant.tier,
-      '| Material laut Variante:', variant.material,
-      '| Schlüssel:', wanted,
-    )
-    if (!match) {
-      console.warn('[pricing] Material nicht gefunden im Herstellerprofil:', wanted)
-    } else {
-      console.log(
-        '[pricing] Gefundenes Material:', match.name,
-        '| aktiv:', match.is_active, '| Preis:', match.price_per_m2,
-      )
-    }
-  }
-
   if (!match || !match.is_active || match.price_per_m2 <= 0) return null
   return match
 }

@@ -60,6 +60,11 @@ export function ManufacturerPricing() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Ohne Stundenlohn und Marge lässt sich später kein Preis berechnen.
+    if (form.hourly_rate <= 0 || form.margin_percent <= 0) {
+      setNotice('Bitte gib mindestens einen Stundenlohn und eine Marge an (jeweils größer als 0).')
+      return
+    }
     setBusy(true)
     setNotice(null)
     try {

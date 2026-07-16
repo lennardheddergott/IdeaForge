@@ -1,11 +1,13 @@
 // ============================================================================
-// Phase 2: Ableitung der drei Umsetzungsvarianten (rein & deterministisch)
+// Ableitung der drei Umsetzungsvarianten (rein & deterministisch)
 // ============================================================================
 // Aus der strukturierten KI-Analyse (ProductSpec) werden IMMER drei realistische
 // Umsetzungsvarianten desselben Möbels abgeleitet: Preisbewusst / Standard /
-// Premium. Preise sind bewusst NOCH KEINE echten Herstellerpreise, sondern
-// konservative ORIENTIERUNGSpreise (klar gekennzeichnet). Die echte
-// Preisberechnung aus Herstellerprofilen kommt in einer späteren Phase.
+// Premium. Diese Datei beschreibt NUR die Varianten (Material, Oberfläche,
+// Beschläge, Lieferzeit) – der PREIS wird ausschließlich in der Pricing-Engine
+// (src/lib/pricing.ts) aus echten Herstellerdaten berechnet und über
+// src/lib/estimate.ts als Preisspanne gebildet. Hier gibt es bewusst KEINE
+// eigene, zweite Preislogik mehr.
 // ============================================================================
 
 import type { ProductSpec } from '@/lib/ideas'
@@ -24,76 +26,15 @@ export interface Variant {
   construction: string
   benefits: string[]
   limitations: string[]
-  /** Orientierungspreise (keine echten Herstellerpreise). */
-  priceFrom: number
-  priceMin: number
-  priceMax: number
   leadTimeWeeks: [number, number]
   /** Hervorgehoben anhand der Preis-Absicht des Nutzers. */
   recommended: boolean
-  priceSource: 'fallback'
 }
 
-// Grobe Standardmaße je Produktart (cm), falls Maße fehlen (Fallback).
-const DEFAULT_DIMS: Record<string, { l: number; h: number; d: number }> = {
-  'tv-board': { l: 200, h: 45, d: 40 },
-  sideboard: { l: 160, h: 80, d: 45 },
-  kommode: { l: 100, h: 85, d: 45 },
-  esstisch: { l: 180, h: 75, d: 90 },
-  tisch: { l: 160, h: 75, d: 80 },
-  schreibtisch: { l: 140, h: 75, d: 70 },
-  schrank: { l: 150, h: 200, d: 60 },
-  regal: { l: 80, h: 180, d: 30 },
-  nachttisch: { l: 45, h: 50, d: 40 },
-  bett: { l: 210, h: 40, d: 160 },
-  default: { l: 120, h: 80, d: 45 },
-}
-
-// Konservative Orientierungs-Materialkosten je m² und Tier.
-const PER_M2: Record<VariantTier, number> = { budget: 340, standard: 640, premium: 1180 }
 const LEAD: Record<VariantTier, [number, number]> = {
   budget: [3, 4],
   standard: [4, 5],
   premium: [6, 7],
-}
-
-const round10 = (n: number) => Math.round(n / 10) * 10
-
-function productKey(spec: ProductSpec): string {
-  const t = `${spec.produktart ?? ''} ${spec.kategorie ?? ''} ${spec.titel ?? ''}`.toLowerCase()
-  for (const key of Object.keys(DEFAULT_DIMS)) {
-    if (key !== 'default' && t.includes(key)) return key
-  }
-  if (/tisch|desk|table/.test(t)) return 'tisch'
-  return 'default'
-}
-
-/** Grobe Materialflächen-Schätzung in m² (konservativ). */
-function estimateAreaM2(spec: ProductSpec): number {
-  const def = DEFAULT_DIMS[productKey(spec)] ?? DEFAULT_DIMS.default
-  const l = spec.masse?.breite_cm ?? def.l
-  const h = spec.masse?.hoehe_cm ?? def.h
-  const d = spec.masse?.tiefe_cm ?? def.d
-  const isTable = /tisch|desk|table/.test(productKey(spec))
-  let cm2: number
-  if (isTable) {
-    cm2 = l * d * 1.6
-  } else {
-    cm2 = 2 * l * h + 2 * h * d + 2 * l * d
-    const shelves = Math.max(0, Math.floor(h / 40) - 1)
-    cm2 += shelves * l * d
-  }
-  return cm2 / 10000
-}
-
-function priceFor(spec: ProductSpec, tier: VariantTier) {
-  const area = estimateAreaM2(spec)
-  const doors = spec.anzahl_tueren ?? 0
-  const drawers = spec.anzahl_schubladen ?? 0
-  const base = area * PER_M2[tier] + doors * 80 + drawers * 60
-  const min = round10(base * 0.85)
-  const max = round10(base * 1.3)
-  return { priceFrom: min, priceMin: min, priceMax: max }
 }
 
 /**
@@ -202,10 +143,8 @@ export function buildVariants(spec: ProductSpec): Variant[] {
     limitations: [
       mustReal ? `${sp.label}-Optik statt Massivholz` : 'Dekoroptik statt Echtholz',
     ],
-    ...priceFor(spec, 'budget'),
     leadTimeWeeks: LEAD.budget,
     recommended: intent === 'budget',
-    priceSource: 'fallback',
   }
 
   const standard: Variant = {
@@ -220,10 +159,8 @@ export function buildVariants(spec: ProductSpec): Variant[] {
     construction: 'Sorgfältige Verarbeitung',
     benefits: ['Echtholzoberfläche', 'Bessere Beschläge', 'Ausgewogenes Preis-Leistungs-Verhältnis'],
     limitations: [mustReal ? 'Furnier statt durchgehendem Massivholz' : 'Kein Massivholz'],
-    ...priceFor(spec, 'standard'),
     leadTimeWeeks: LEAD.standard,
     recommended: intent === 'flexible',
-    priceSource: 'fallback',
   }
 
   const premium: Variant = {
@@ -237,10 +174,8 @@ export function buildVariants(spec: ProductSpec): Variant[] {
     construction: 'Massivholzkonstruktion',
     benefits: ['Echtes Massivholz', 'Höchste Langlebigkeit', 'Premium-Beschläge & Oberfläche'],
     limitations: ['Höchster Preis', 'Etwas längere Lieferzeit'],
-    ...priceFor(spec, 'premium'),
     leadTimeWeeks: LEAD.premium,
     recommended: intent === 'premium',
-    priceSource: 'fallback',
   }
 
   return [budget, standard, premium]

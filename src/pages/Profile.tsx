@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { CreditCard, Mail, Package, Settings, User } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
@@ -23,9 +23,20 @@ const tabs: { id: Tab; label: string; icon: typeof User }[] = [
 
 export function Profile() {
   const { user } = useAuth()
-  const [tab, setTab] = useState<Tab>('account')
+  const location = useLocation()
+  // Erlaubt Deep-Links auf einen bestimmten Tab (z. B. Sidebar → „Einstellungen").
+  const requestedTab = (location.state as { tab?: Tab } | null)?.tab
+  const [tab, setTab] = useState<Tab>(requestedTab ?? 'account')
   const [fullName, setFullName] = useState('')
   const [loaded, setLoaded] = useState(false)
+
+  // Bei jeder neuen Navigation (auch auf /profile selbst) den gewünschten Tab
+  // übernehmen – React-empfohlenes Render-Phase-Muster statt Effekt.
+  const [navKey, setNavKey] = useState(location.key)
+  if (location.key !== navKey) {
+    setNavKey(location.key)
+    if (requestedTab) setTab(requestedTab)
+  }
 
   useEffect(() => {
     let cancelled = false

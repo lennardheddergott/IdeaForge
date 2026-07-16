@@ -11,6 +11,11 @@
 import { listIdeas, type Idea } from '@/lib/ideas'
 import { listMyOrders, type Order } from '@/lib/orders'
 import { buildVariants } from '@/lib/variants'
+import {
+  estimateProduct,
+  loadManufacturerOffers,
+  type ManufacturerOffer,
+} from '@/lib/estimate'
 import { categories } from '@/data/options'
 
 export interface ProjectStatus {
@@ -71,7 +76,11 @@ function statusFor(idea: Idea, order: Order | null): ProjectStatus {
 }
 
 /** Baut aus einer Idee (+ optionaler Order) die Projekt-Ansicht. */
-export function toProject(idea: Idea, order: Order | null): Project {
+export function toProject(
+  idea: Idea,
+  order: Order | null,
+  offers: ManufacturerOffer[],
+): Project {
   const spec = idea.concept
   const category =
     spec?.kategorie ??
@@ -81,13 +90,8 @@ export function toProject(idea: Idea, order: Order | null): Project {
     title: spec?.titel ?? idea.prompt.slice(0, 60),
     category,
     description: spec?.kurzbeschreibung || idea.prompt,
-    // Orientierungs-Preisspanne aus den Varianten (deterministisch, kein KI-Preis).
-    price: spec
-      ? (() => {
-          const vs = buildVariants(spec)
-          return { min: vs[0].priceFrom, max: vs[vs.length - 1].priceMax }
-        })()
-      : null,
+    // Preisspanne AUSSCHLIESSLICH aus der echten Herstellerkalkulation.
+    price: spec ? estimateProduct(spec, buildVariants(spec), offers) : null,
     status: statusFor(idea, order),
     createdAt: idea.created_at,
     previewUrl: idea.preview_image_url ?? idea.image_url,
@@ -102,7 +106,11 @@ export function toProject(idea: Idea, order: Order | null): Project {
  * Themenfremde (rejected) und leere Entwürfe (draft) werden ausgeblendet.
  */
 export async function listMyProjects(): Promise<Project[]> {
-  const [ideas, orders] = await Promise.all([listIdeas(), listMyOrders()])
+  const [ideas, orders, offers] = await Promise.all([
+    listIdeas(),
+    listMyOrders(),
+    loadManufacturerOffers(),
+  ])
 
   // Neueste Order je Idee (listMyOrders liefert neueste zuerst).
   const orderByIdea = new Map<string, Order>()
@@ -111,6 +119,7 @@ export async function listMyProjects(): Promise<Project[]> {
   }
 
   return ideas
-    .filter((i) => i.status !== 'rejected' && i.status !== 'draft')
-    .map((i) => toProject(i, orderByIdea.get(i.id) ?? null))
+    // Raum-Produkte gehören zu ihrem Raumprojekt und erscheinen nicht einzeln.
+    .filter((i) => i.status !== 'rejected' && i.status !== 'draft' && !i.room_project_id)
+    .map((i) => toProject(i, orderByIdea.get(i.id) ?? null, offers))
 }

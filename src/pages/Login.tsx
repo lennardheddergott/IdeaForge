@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { Reveal } from '@/components/ui/Reveal'
 import { AmbientScene } from '@/components/ui/AmbientScene'
 import { useAuth } from '@/context/AuthContext'
-import { getMyProfile, homeForRole, type UserRole } from '@/lib/profile'
+import { getMyProfile, type UserRole } from '@/lib/profile'
 import { cn } from '@/lib/utils'
 
 type Mode = 'signin' | 'signup'
@@ -32,7 +32,9 @@ export function Login() {
       // Hersteller landen im Dashboard (das ggf. ins Onboarding weiterleitet).
       navigate('/manufacturer', { replace: true })
     } else {
-      navigate(from ?? homeForRole('customer'), { replace: true })
+      // Kunden landen immer auf der Landingpage; ein Rücksprungziel (from,
+      // z. B. beim Deep-Link auf eine geschützte Seite) hat Vorrang.
+      navigate(from ?? '/', { replace: true })
     }
   }
 

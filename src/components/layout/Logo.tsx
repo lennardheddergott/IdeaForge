@@ -14,15 +14,12 @@ export function Logo({
   return (
     <Link
       to="/"
-      className={cn('group inline-flex items-center', tight ? 'gap-1' : 'gap-2.5', className)}
+      className={cn('inline-flex items-center', tight ? 'gap-1' : 'gap-2.5', className)}
     >
       <img
         src="/logo.png"
         alt="Forma Logo"
-        className={cn(
-          'h-10 w-10 object-contain transition-transform duration-300 ease-[var(--ease-smooth)] group-hover:scale-105',
-          tight && '-mr-2',
-        )}
+        className={cn('h-10 w-10 object-contain', tight && '-mr-2')}
       />
       <span
         className={cn(

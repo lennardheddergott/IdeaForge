@@ -252,7 +252,7 @@ export function ManufacturerDashboard() {
         )}
 
         {/* Kennzahlen = Filter für die Auftragsbereiche */}
-        <div className="mt-8 grid grid-cols-3 gap-4">
+        <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {stats.map((s, i) => {
             const active = focus === s.key
             return (

@@ -128,7 +128,7 @@ export function Dashboard() {
 
         {/* Kennzahlen = Filter (nur wenn es Projekte gibt) */}
         {projects && projects.length > 0 && (
-          <div className="mt-8 grid grid-cols-3 gap-4">
+          <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
             {FILTERS.map((f, i) => {
               const count = list.filter(f.match).length
               const active = filter === f.key

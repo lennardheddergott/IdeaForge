@@ -112,7 +112,7 @@ export function IdeaFlow({ onActiveChange }: { onActiveChange?: (active: boolean
   return (
     <section className="relative overflow-hidden">
       <AmbientScene className="h-[72vh]" />
-      <Container className={cn(active ? 'pt-28 pb-20 sm:pt-32' : 'pt-36 pb-24 sm:pt-44 sm:pb-32')}>
+      <Container className={cn(active ? 'pt-28 pb-20 sm:pt-32' : 'pt-12 pb-24 sm:pt-24 sm:pb-32')}>
         <AnimatePresence mode="wait" initial={false}>
           {phase === 'idle' ? (
             <motion.div

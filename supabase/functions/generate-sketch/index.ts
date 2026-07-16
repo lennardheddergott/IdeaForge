@@ -1,7 +1,7 @@
 // ============================================================================
 // Edge Function: generate-sketch
 // ============================================================================
-// Erzeugt aus einer gespeicherten Idee ZWEI Bilder mit OpenAI (gpt-image-1):
+// Erzeugt aus einer gespeicherten Idee ZWEI Bilder mit OpenAI (gpt-image-2):
 //   1) ein standardisiertes technisches Konzeptblatt (concept_sheet_url)
 //   2) eine fotorealistische Produktvorschau (preview_image_url)
 // Beide werden im Storage-Bucket 'idea-sketches' abgelegt; die öffentlichen
@@ -42,14 +42,7 @@ async function generateImageBytes(opts: {
   size: string
   quality: string
   prompt: string
-  label: string
 }): Promise<Uint8Array> {
-  console.log(`[generate-sketch] OpenAI /images/generations → Anfrage (${opts.label})`, {
-    model: opts.model,
-    size: opts.size,
-    quality: opts.quality,
-    promptLen: opts.prompt.length,
-  })
   const resp = await fetch(OPENAI_IMAGE_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -64,28 +57,16 @@ async function generateImageBytes(opts: {
       n: 1,
     }),
   })
-  console.log(`[generate-sketch] OpenAI /images/generations → Antwort (${opts.label})`, {
-    httpStatus: resp.status,
-    ok: resp.ok,
-  })
 
   if (!resp.ok) {
     const detail = await resp.text()
-    console.error(
-      `[generate-sketch] OpenAI Bild-VOLLSTÄNDIGE Fehlerantwort (${opts.label}) [HTTP ${resp.status}]:`,
-      detail,
-    )
-    throw new Error(`OpenAI-Bildfehler (${resp.status}): ${detail.slice(0, 800)}`)
+    throw new Error(`OpenAI-API-Fehler (${resp.status}): ${detail.slice(0, 400)}`)
   }
 
   const result = await resp.json()
   const b64: string | undefined = result?.data?.[0]?.b64_json
   if (!b64) {
-    console.error(
-      `[generate-sketch] OpenAI-Antwort ohne Bilddaten (${opts.label}) – vollständig:`,
-      JSON.stringify(result),
-    )
-    throw new Error(`OpenAI hat kein Bild zurückgegeben. Antwort: ${JSON.stringify(result).slice(0, 800)}`)
+    throw new Error('OpenAI hat kein Bild zurückgegeben.')
   }
   return Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
 }
@@ -111,14 +92,9 @@ Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
-
-  // GLOBALES try/catch: es wird IMMER ein JSON-Body zurückgegeben (nie ein
-  // leerer/Plain-Text-Response), damit das Frontend die echte Ursache sieht.
-  try {
-    console.log('[generate-sketch] Handler gestartet', { method: req.method })
-    if (req.method !== 'POST') {
-      return json({ error: 'Method not allowed.' }, 405)
-    }
+  if (req.method !== 'POST') {
+    return json({ error: 'Method not allowed.' }, 405)
+  }
 
   // --- Konfiguration / Secrets aus Environment-Variablen --------------------
   const openaiKey = Deno.env.get('OPENAI_API_KEY')
@@ -191,7 +167,6 @@ Deno.serve(async (req: Request) => {
     // --- 1) Analyse: Möbel-Klassifikation + strukturierte Spec --------------
     //   Dies ist die EINZIGE Quelle für Visualisierung, Konzeptblatt & Preis.
     const textModel = Deno.env.get('OPENAI_TEXT_MODEL') ?? 'gpt-4o-mini'
-    console.log('[generate-sketch] Spec-Analyse startet', { ideaId, textModel })
     const spec = await generateSpec({
       apiKey: openaiKey,
       model: textModel,
@@ -201,10 +176,6 @@ Deno.serve(async (req: Request) => {
         materials: idea.materials,
         category: idea.category,
       },
-    })
-    console.log('[generate-sketch] Spec fertig', {
-      ist_moebel: spec.ist_moebel,
-      titel: spec.titel,
     })
 
     // --- 1a) Themenfremde Eingabe → ablehnen, KEINE Bildgenerierung ---------
@@ -229,18 +200,14 @@ Deno.serve(async (req: Request) => {
     const previewPrompt = buildPreviewPrompt(spec) // fotorealistische Vorschau
 
     // --- 3) Beide Bilder bei OpenAI erzeugen (parallel → konsistent & schnell)
-    // Standard-Bildmodell: 'gpt-image-1' (existierendes OpenAI-Modell). Ein
-    // ungültiger Default würde den Bild-Call scheitern lassen → status 'failed'.
-    const model = Deno.env.get('OPENAI_IMAGE_MODEL') ?? 'gpt-image-1'
+    const model = Deno.env.get('OPENAI_IMAGE_MODEL') ?? 'gpt-image-2'
     const size = Deno.env.get('OPENAI_IMAGE_SIZE') ?? '1024x1024'
     const quality = Deno.env.get('OPENAI_IMAGE_QUALITY') ?? 'medium'
 
-    console.log('[generate-sketch] Bilderzeugung startet', { model, size, quality })
     const [conceptBytes, previewBytes] = await Promise.all([
-      generateImageBytes({ apiKey: openaiKey, model, size, quality, prompt: conceptPrompt, label: 'Konzeptblatt' }),
-      generateImageBytes({ apiKey: openaiKey, model, size, quality, prompt: previewPrompt, label: 'Vorschau' }),
+      generateImageBytes({ apiKey: openaiKey, model, size, quality, prompt: conceptPrompt }),
+      generateImageBytes({ apiKey: openaiKey, model, size, quality, prompt: previewPrompt }),
     ])
-    console.log('[generate-sketch] Bilder erzeugt')
 
     // --- 4) Beide Bilder getrennt in den Storage-Bucket hochladen -----------
     const [conceptUrl, previewUrl] = await Promise.all([
@@ -264,44 +231,18 @@ Deno.serve(async (req: Request) => {
       throw new Error(`DB-Update fehlgeschlagen: ${updateError.message}`)
     }
 
-    console.log('[generate-sketch] Fertig: status=generated', { ideaId })
     return json({
       status: 'generated',
       concept_sheet_url: conceptUrl,
       preview_image_url: previewUrl,
     })
   } catch (e) {
-    const err = e as Error
-    const message = err?.message ?? 'Unbekannter Fehler.'
-    // ===== VOLLSTÄNDIGE Diagnose DIREKT vor status='failed' =====
-    console.error('[generate-sketch] ============ EXCEPTION vor status=failed ============')
-    console.error('[generate-sketch] name   :', err?.name)
-    console.error('[generate-sketch] message:', message)
-    console.error('[generate-sketch] stack  :', err?.stack)
-    console.error('[generate-sketch] exception (raw):', e)
-    try {
-      console.error('[generate-sketch] exception (JSON):', JSON.stringify(e, Object.getOwnPropertyNames(err ?? {})))
-    } catch {
-      /* nicht serialisierbar */
-    }
-    console.error('[generate-sketch] =====================================================')
+    const message = e instanceof Error ? e.message : 'Unbekannter Fehler.'
     // Fehler an der Idee vermerken (best effort – Fehler hier nicht erneut werfen).
     await admin
       .from('ideas')
       .update({ status: 'failed', error: message })
       .eq('id', ideaId)
-    return json(
-      { status: 'failed', error: message, name: err?.name ?? null, stack: err?.stack ?? null },
-      500,
-    )
-  }
-  } catch (error) {
-    // Letzte Sicherheitsstufe: JEDER unerwartete Fehler → IMMER JSON mit Stack.
-    console.error('[generate-sketch] Unbehandelter Fehler', error)
-    const err = error as Error
-    return json(
-      { error: true, message: err?.message ?? String(error), stack: err?.stack ?? null },
-      500,
-    )
+    return json({ status: 'failed', error: message }, 500)
   }
 })

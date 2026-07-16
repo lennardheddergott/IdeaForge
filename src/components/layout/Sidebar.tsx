@@ -10,7 +10,6 @@ import {
   Package,
   Plus,
   Settings,
-  Sofa,
   Sparkles,
   Tag,
   User,
@@ -62,7 +61,6 @@ function useNavSections(): NavItem[][] {
     [
       { to: '/dashboard', label: 'Meine Projekte', icon: Package },
       { to: '/create', label: 'Neue Idee', icon: Plus, accent: true },
-      { to: '/room-planner', label: 'Raum gestalten', icon: Sofa, badge: 'Pro' },
     ],
     [
       { to: '/profile', label: 'Profil', icon: User, end: true },

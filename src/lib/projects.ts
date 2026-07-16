@@ -119,7 +119,6 @@ export async function listMyProjects(): Promise<Project[]> {
   }
 
   return ideas
-    // Raum-Produkte gehören zu ihrem Raumprojekt und erscheinen nicht einzeln.
-    .filter((i) => i.status !== 'rejected' && i.status !== 'draft' && !i.room_project_id)
+    .filter((i) => i.status !== 'rejected' && i.status !== 'draft')
     .map((i) => toProject(i, orderByIdea.get(i.id) ?? null, offers))
 }

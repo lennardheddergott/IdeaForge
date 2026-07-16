@@ -287,18 +287,10 @@ export async function generateSpec(opts: {
     }),
   })
 
-  console.log('[generate-sketch] Spec-OpenAI /chat/completions → Antwort', {
-    httpStatus: resp.status,
-    ok: resp.ok,
-  })
   if (!resp.ok) {
     const detail = await resp.text()
-    console.error(
-      `[generate-sketch] Spec-OpenAI VOLLSTÄNDIGE Fehlerantwort [HTTP ${resp.status}]:`,
-      detail,
-    )
     throw new Error(
-      `OpenAI-Analyse fehlgeschlagen (${resp.status}): ${detail.slice(0, 800)}`,
+      `OpenAI-Analyse fehlgeschlagen (${resp.status}): ${detail.slice(0, 400)}`,
     )
   }
 

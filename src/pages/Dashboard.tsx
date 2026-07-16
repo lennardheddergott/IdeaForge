@@ -7,7 +7,6 @@ import {
   FolderOpen,
   Package,
   Plus,
-  Sofa,
   X,
 } from 'lucide-react'
 import { Container } from '@/components/ui/Container'
@@ -19,7 +18,6 @@ import { cn, formatDate, formatEUR } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { getMyProfile } from '@/lib/profile'
 import { listMyProjects, type Project } from '@/lib/projects'
-import { listRoomProjects, type RoomProject } from '@/lib/roomPlanner'
 
 /** Filter über den Projekt-Kennzahlen. Jede Karte filtert die Liste darunter. */
 type FilterKey = 'all' | 'in_production' | 'completed'
@@ -99,17 +97,6 @@ export function Dashboard() {
     }
   }, [])
 
-  const [rooms, setRooms] = useState<RoomProject[] | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    listRoomProjects()
-      .then((r) => !cancelled && setRooms(r))
-      .catch(() => !cancelled && setRooms([]))
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const [filter, setFilter] = useState<FilterKey>('all')
   const list = projects ?? []
   const activeFilter = FILTERS.find((f) => f.key === filter) ?? FILTERS[0]
@@ -175,22 +162,6 @@ export function Dashboard() {
               )
             })}
           </div>
-        )}
-
-        {/* Raumprojekte (Pro) */}
-        {rooms && rooms.length > 0 && (
-          <Reveal>
-            <div className="mt-8">
-              <h2 className="flex items-center gap-2 text-lg font-semibold text-ink-950">
-                <Sofa size={18} className="text-accent-600" /> Raumprojekte
-              </h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {rooms.map((r) => (
-                  <RoomProjectCard key={r.id} room={r} />
-                ))}
-              </div>
-            </div>
-          </Reveal>
         )}
 
         {/* Projektübersicht */}
@@ -259,46 +230,6 @@ function EmptyState() {
         />
       </Button>
     </div>
-  )
-}
-
-const ROOM_STATUS: Record<string, { label: string; color: string }> = {
-  processing: { label: 'Möbel entstehen …', color: 'bg-amber-50 text-amber-600' },
-  rendering: { label: 'Raum wird erzeugt …', color: 'bg-violet-50 text-violet-600' },
-  ready: { label: 'Fertig', color: 'bg-emerald-50 text-emerald-600' },
-  failed: { label: 'Fehlgeschlagen', color: 'bg-rose-50 text-rose-600' },
-}
-
-function RoomProjectCard({ room }: { room: RoomProject }) {
-  const st = ROOM_STATUS[room.status] ?? ROOM_STATUS.processing
-  return (
-    <Link to={`/room-planner/${room.id}`} className="group block">
-      <Card hover className="overflow-hidden">
-        <div className="aspect-[16/10] w-full overflow-hidden bg-ink-50">
-          {room.photoUrl ? (
-            <img src={room.photoUrl} alt="" className="h-full w-full object-cover" />
-          ) : (
-            <span className="flex h-full w-full items-center justify-center text-ink-300">
-              <Sofa size={24} />
-            </span>
-          )}
-        </div>
-        <div className="p-4">
-          <div className="flex items-center justify-between gap-2">
-            <span className="rounded-full bg-accent-50 px-2 py-0.5 text-[11px] font-semibold text-accent-700">
-              Raumprojekt
-            </span>
-            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', st.color)}>
-              {st.label}
-            </span>
-          </div>
-          <p className="mt-2 truncate font-semibold text-ink-950">{room.name}</p>
-          <p className="mt-0.5 text-xs text-ink-400">
-            {room.selectedCount ?? 0}/{room.productCount ?? 0} Möbel ausgewählt
-          </p>
-        </div>
-      </Card>
-    </Link>
   )
 }
 

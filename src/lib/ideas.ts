@@ -99,17 +99,6 @@ export interface Idea {
   version_number: number
   /** Beschreibung der Änderung, die zu dieser Version geführt hat (null bei V1). */
   change_note: string | null
-  /** Verknüpftes Raumprojekt (null = normale Einzelidee). */
-  room_project_id: string | null
-  /** Position des Möbels im Raum (Freitext, nur bei Raum-Produkten). */
-  room_position: string | null
-  /**
-   * Vom Nutzer markierte Zielregion im Raumfoto (normalisiert 0..1). Dient als
-   * Platzierungshinweis fürs Rendering UND als unsichtbare Klickfläche (Hotspot).
-   */
-  room_bbox: { x: number; y: number; w: number; h: number; polygon?: number[][] } | null
-  /** Vom Kunden für die Bestellung ausgewählt (nur bei Raum-Produkten relevant). */
-  room_selected: boolean
   created_at: string
 }
 

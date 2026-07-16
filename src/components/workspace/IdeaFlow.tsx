@@ -238,18 +238,18 @@ function Hero({ onStart }: { onStart: (text: string) => void }) {
         className="group relative mt-11 w-full max-w-xl"
       >
         <div className="pointer-events-none absolute -inset-2 -z-10 rounded-[2rem] bg-accent-400/0 blur-2xl transition-colors duration-500 group-focus-within:bg-accent-400/20" />
-        <div className="flex items-center gap-2 rounded-2xl border border-ink-200 bg-white/90 p-2 pl-5 shadow-soft backdrop-blur transition-colors focus-within:border-accent-400">
+        <div className="flex flex-col gap-2 rounded-2xl border border-ink-200 bg-white/90 p-2 shadow-soft backdrop-blur transition-colors focus-within:border-accent-400 sm:flex-row sm:items-center sm:gap-2 sm:pl-5">
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Beschreibe deine Idee …"
             aria-label="Beschreibe deine Idee"
             autoFocus
-            className="h-11 flex-1 bg-transparent text-[1.05rem] text-ink-900 outline-none placeholder:text-ink-300"
+            className="h-11 w-full min-w-0 flex-1 bg-transparent px-3 text-[1.05rem] text-ink-900 outline-none placeholder:text-ink-300 sm:px-0"
           />
           <button
             type="submit"
-            className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-ink-950 px-4 text-sm font-medium text-white transition-colors hover:bg-ink-800"
+            className="flex h-11 w-full shrink-0 items-center justify-center gap-2 rounded-xl bg-ink-950 px-4 text-sm font-medium text-white transition-colors hover:bg-ink-800 sm:w-auto"
           >
             Idee starten
             <ArrowRight size={16} />

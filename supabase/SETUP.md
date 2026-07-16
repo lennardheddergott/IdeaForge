@@ -1,4 +1,4 @@
-# Supabase-Einrichtung für IdeaForge
+# Supabase-Einrichtung für Forma
 
 Schritt-für-Schritt-Anleitung, um Benutzerkonten (E-Mail + Passwort) und das
 Speichern von Ideen zu aktivieren. Dauert ca. 10 Minuten.

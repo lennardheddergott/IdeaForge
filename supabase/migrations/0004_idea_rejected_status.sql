@@ -1,7 +1,7 @@
 -- ============================================================================
 -- Migration 0004 — Idee-Status 'rejected' (themenfremde Eingabe)
 -- ============================================================================
--- IdeaForge ist ausschließlich auf Möbel spezialisiert. Erkennt die KI-Analyse,
+-- Forma ist ausschließlich auf Möbel spezialisiert. Erkennt die KI-Analyse,
 -- dass eine Eingabe KEIN Möbelstück beschreibt, wird die Idee mit status
 -- 'rejected' markiert (keine Bildgenerierung, kein Konzeptblatt). Die freundliche
 -- Begründung steht im bestehenden Feld "error".

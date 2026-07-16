@@ -40,7 +40,7 @@ export const designConcept = {
       { label: 'Material', value: 720 },
       { label: 'Fertigung', value: 960 },
       { label: 'Beschläge & LED', value: 280 },
-      { label: 'IdeaForge Service', value: 520 },
+      { label: 'Forma Service', value: 520 },
     ],
   },
 }

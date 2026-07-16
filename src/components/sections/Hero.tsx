@@ -100,7 +100,7 @@ function HeroPreview() {
           <span className="h-3 w-3 rounded-full bg-ink-200" />
           <span className="h-3 w-3 rounded-full bg-ink-200" />
           <div className="ml-3 flex-1 rounded-md bg-ink-100/70 px-3 py-1 text-left text-xs text-ink-400">
-            ideaforge.app/create
+            forma.app/create
           </div>
         </div>
 

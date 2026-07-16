@@ -40,7 +40,7 @@ export function Navbar() {
             >
               <Menu size={20} />
             </button>
-            <Logo />
+            <Logo tight />
           </nav>
         </div>
       </header>

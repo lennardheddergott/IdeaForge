@@ -176,7 +176,7 @@ export function IdeaFlow({ onActiveChange }: { onActiveChange?: (active: boolean
                         title="Das ist (noch) kein Möbelstück"
                         body={
                           message ??
-                          'IdeaForge ist aktuell ausschließlich auf Möbelstücke spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'
+                          'Forma ist aktuell ausschließlich auf Möbelstücke spezialisiert. Bitte beschreibe ein Möbelstück, das du gestalten möchtest.'
                         }
                         onAction={reset}
                         actionLabel="Neue Möbelidee beschreiben"

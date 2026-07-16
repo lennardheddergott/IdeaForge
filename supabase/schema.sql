@@ -1,5 +1,5 @@
 -- ============================================================================
--- IdeaForge — Datenbank-Schema (Supabase / PostgreSQL)
+-- Forma — Datenbank-Schema (Supabase / PostgreSQL)
 -- ============================================================================
 -- Auth-Methode: E-Mail + Passwort (Supabase Auth, Tabelle auth.users)
 --

@@ -127,8 +127,8 @@ export function ProcessingBody({
               {finished
                 ? 'Dein Konzept ist fertig.'
                 : productType
-                  ? `IdeaForge entwickelt dein ${productType}`
-                  : 'IdeaForge entwickelt deine Idee'}
+                  ? `Forma entwickelt dein ${productType}`
+                  : 'Forma entwickelt deine Idee'}
             </p>
             <p className="truncate text-sm text-ink-400">„{prompt}“</p>
           </div>

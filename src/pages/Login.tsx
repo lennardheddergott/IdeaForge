@@ -5,7 +5,6 @@ import { Container } from '@/components/ui/Container'
 import { Button } from '@/components/ui/Button'
 import { Reveal } from '@/components/ui/Reveal'
 import { AmbientScene } from '@/components/ui/AmbientScene'
-import { Logo } from '@/components/layout/Logo'
 import { useAuth } from '@/context/AuthContext'
 import { getMyProfile, homeForRole, type UserRole } from '@/lib/profile'
 import { cn } from '@/lib/utils'
@@ -75,15 +74,20 @@ export function Login() {
       <AmbientScene className="h-[60vh]" />
       <Container className="max-w-md py-24">
         <Reveal>
-          <div className="rounded-3xl border border-ink-100 bg-white/90 p-8 shadow-soft backdrop-blur">
-            <div className="flex flex-col items-center text-center">
-              <Logo />
-              <h1 className="mt-6 text-2xl font-semibold tracking-tight text-ink-950">
-                {mode === 'signin' ? 'Anmelden' : 'Konto erstellen'}
-              </h1>
-            </div>
+          {/* Header – NICHT Teil der Card */}
+          <div className="flex flex-col items-center text-center">
+            <img src="/logo.png" alt="Forma Logo" className="h-[160px] w-[160px] object-contain" />
+            <span className="-mt-[22px] font-sans text-[44px] font-extrabold leading-none tracking-[-0.03em] text-[#0F172A]">
+              Forma
+            </span>
+            <p className="mt-2 text-ink-500">
+              {mode === 'signin' ? 'Melde dich in deinem Konto an' : 'Erstelle dein Konto'}
+            </p>
+          </div>
 
-            <form onSubmit={submit} className="mt-8 flex flex-col gap-4">
+          {/* Login-Card – enthält nur das Formular */}
+          <div className="mt-7 rounded-3xl border border-ink-100 bg-white/90 p-8 shadow-soft backdrop-blur">
+            <form onSubmit={submit} className="flex flex-col gap-4">
               {mode === 'signup' && (
                 <>
                   {/* Rollenauswahl */}

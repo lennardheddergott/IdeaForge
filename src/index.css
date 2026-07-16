@@ -54,11 +54,14 @@
 @layer base {
   * {
     border-color: var(--color-ink-100);
+    box-sizing: border-box;
   }
 
   html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   body {
@@ -69,6 +72,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
   ::selection {

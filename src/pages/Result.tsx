@@ -242,7 +242,7 @@ export function Result() {
       ) : (
         <div className="grid gap-8 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
           {/* LINKS — Möbel, Versionen, Änderungen */}
-          <section className="flex flex-col">
+          <section className="flex w-full min-w-0 flex-col">
             {/* Kopf: Name · Version · Konzeptblatt */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
@@ -323,7 +323,7 @@ export function Result() {
           </section>
 
           {/* RECHTS — Varianten + Bestellung */}
-          <aside className="flex flex-col gap-3">
+          <aside className="flex w-full min-w-0 flex-col gap-3">
             <p className="text-sm font-medium text-ink-500">Umsetzung</p>
             {variants ? (
               variants.map((v) => (
@@ -481,7 +481,7 @@ function HeroStage({
   return (
     <a href={src} target="_blank" rel="noopener noreferrer" className="group block">
       <div className="overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-lift transition-shadow group-hover:shadow-float">
-        <img src={src} alt="Produktvorschau" className="aspect-[4/3] w-full object-cover" />
+        <img src={src} alt="Produktvorschau" className="aspect-[4/3] w-full max-w-full object-cover" />
       </div>
     </a>
   )

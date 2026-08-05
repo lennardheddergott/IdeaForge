@@ -6,6 +6,10 @@ import { Login } from '@/pages/Login'
 import { CreateIdea } from '@/pages/CreateIdea'
 import { Result } from '@/pages/Result'
 import { Manufacturers } from '@/pages/Manufacturers'
+import { Impressum } from '@/pages/Impressum'
+import { Datenschutz } from '@/pages/Datenschutz'
+import { AGB } from '@/pages/AGB'
+import { Cookies } from '@/pages/Cookies'
 import { Dashboard } from '@/pages/Dashboard'
 import { Profile } from '@/pages/Profile'
 import { Checkout } from '@/pages/Checkout'
@@ -24,6 +28,10 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/manufacturers" element={<Manufacturers />} />
+        <Route path="/impressum" element={<Impressum />} />
+        <Route path="/datenschutz" element={<Datenschutz />} />
+        <Route path="/agb" element={<AGB />} />
+        <Route path="/cookies" element={<Cookies />} />
 
         {/* Nur für eingeloggte Kunden */}
         <Route element={<ProtectedRoute role="customer" />}>
